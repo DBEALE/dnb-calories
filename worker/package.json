@@ -1,0 +1,19 @@
+{
+  "name": "calorie-extractor",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for nutrition extraction via OpenRouter API",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "wrangler": "^4.90.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240125.0",
+    "typescript": "^5.3.3"
+  }
+}

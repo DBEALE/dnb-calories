@@ -1,0 +1,1955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calorie Deficit Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #fafaf9;
+            --bg-secondary: #f5f5f4;
+            --bg-tertiary: #e7e5e4;
+            --text-primary: #292524;
+            --text-secondary: #78716f;
+            --text-tertiary: #a8a29e;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --accent-info: #0ea5e9;
+            --border-color: #e7e5e4;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 70px;
+            scroll-behavior: smooth;
+        }
+
+        .screen {
+            display: none;
+            padding: 16px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Header */
+        .header {
+            padding: 16px;
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .header-date {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Navigation */
+        .nav-tabs {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: white;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 100;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-btn {
+            flex: 1;
+            height: 100%;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            color: var(--text-tertiary);
+            transition: all 0.2s;
+            border-top: 3px solid transparent;
+        }
+
+        .nav-btn.active {
+            color: var(--accent-info);
+            border-top-color: var(--accent-info);
+        }
+
+        .nav-icon {
+            font-size: 20px;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        /* KPI Card */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .kpi-card {
+            background: linear-gradient(135deg, #f5f5f4 0%, #ede9e4 100%);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .kpi-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .kpi-unit {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        .kpi-card.success {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        }
+
+        .kpi-card.warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        }
+
+        .kpi-card.danger {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent-info);
+            color: white;
+            width: 100%;
+            justify-content: center;
+            margin-bottom: 12px;
+        }
+
+        .btn-primary:hover {
+            background: #0284c7;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .btn-success {
+            background: var(--accent-success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        /* Input Fields */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            background: white;
+            color: var(--text-primary);
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent-info);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        /* Action Buttons */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .action-btn {
+            padding: 14px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .action-btn:active {
+            background: var(--bg-secondary);
+            border-color: var(--accent-info);
+            color: var(--accent-info);
+        }
+
+        .action-icon {
+            font-size: 24px;
+        }
+
+        /* Meal Timeline */
+        .meal-entry {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .meal-entry:last-child {
+            border-bottom: none;
+        }
+
+        .meal-info {
+            flex: 1;
+        }
+
+        .meal-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .meal-details {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .meal-cal {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: right;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 200;
+            animation: fadeIn 0.2s;
+        }
+
+        .modal.active {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .modal-content {
+            background: white;
+            width: 100%;
+            max-width: 100%;
+            height: 100vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .modal-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 201;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .modal-body {
+            padding: 16px;
+        }
+
+        /* Charts */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 16px;
+        }
+
+        /* Macro Summary */
+        .macro-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .macro-item {
+            text-align: center;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .macro-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .macro-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 4px;
+        }
+
+        /* Setup Wizard */
+        .wizard-step {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .wizard-step.active {
+            display: block;
+        }
+
+        .wizard-progress {
+            height: 4px;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .wizard-progress-bar {
+            height: 100%;
+            background: var(--accent-info);
+            transition: width 0.3s;
+        }
+
+        .wizard-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .wizard-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        /* Utils */
+        .text-center {
+            text-align: center;
+        }
+
+        .text-muted {
+            color: var(--text-secondary);
+        }
+
+        .mt-16 {
+            margin-top: 16px;
+        }
+
+        .mt-24 {
+            margin-top: 24px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .content {
+                max-width: 600px;
+                margin: 0 auto;
+                padding-bottom: 100px;
+            }
+
+            .modal-content {
+                max-width: 500px;
+            }
+        }
+
+        /* Status badge */
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #065f46;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #7f1d1d;
+        }
+
+        /* Loading state */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--bg-tertiary);
+            border-top: 2px solid var(--accent-info);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1 id="header-title">Today</h1>
+                <div class="header-date" id="header-date"></div>
+            </div>
+            <button class="action-icon" onclick="app.openSettings()" style="background: none; border: none; font-size: 20px; cursor: pointer;">⚙️</button>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Today Screen -->
+            <div class="screen active" id="screen-today">
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Consumed</div>
+                        <div><span class="kpi-value" id="today-consumed">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Target</div>
+                        <div><span class="kpi-value" id="today-target">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card success" id="remaining-card">
+                        <div class="kpi-label">Remaining</div>
+                        <div><span class="kpi-value" id="today-remaining">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                    <div class="kpi-card" id="deficit-card">
+                        <div class="kpi-label">vs Maintenance</div>
+                        <div><span class="kpi-value" id="today-deficit">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <button class="action-btn" onclick="app.openUpload()">
+                        <span class="action-icon">📸</span>
+                        <span>Upload</span>
+                    </button>
+                    <button class="action-btn" onclick="app.openQuickAdd()">
+                        <span class="action-icon">⚡</span>
+                        <span>Quick Add</span>
+                    </button>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Today's Meals</div>
+                    <div id="today-meals"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Macros</div>
+                    <div class="macro-grid" id="today-macros">
+                        <div class="macro-item">
+                            <div class="macro-label">Protein</div>
+                            <div class="macro-value" id="macro-protein">0g</div>
+                        </div>
+                        <div class="macro-item">
+                            <div class="macro-label">Carbs</div>
+                            <div class="macro-value" id="macro-carbs">0g</div>
+                        </div>
+                        <div class="macro-item">
+                            <div class="macro-label">Fat</div>
+                            <div class="macro-value" id="macro-fat">0g</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Latest Weight</div>
+                    <div id="today-weight" style="font-size: 18px; font-weight: 600;">No entry yet</div>
+                </div>
+            </div>
+
+            <!-- Week Screen -->
+            <div class="screen" id="screen-week">
+                <div class="card">
+                    <div class="card-title">This Week</div>
+                    <div class="chart-container">
+                        <canvas id="week-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Weekly Total</div>
+                        <div><span class="kpi-value" id="week-total">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                    <div class="kpi-card success">
+                        <div class="kpi-label">Weekly Deficit</div>
+                        <div><span class="kpi-value" id="week-deficit">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Daily Average</div>
+                        <div><span class="kpi-value" id="week-avg">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Est. Fat Loss</div>
+                        <div><span class="kpi-value" id="week-loss">0</span><span class="kpi-unit">kg</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Month Screen -->
+            <div class="screen" id="screen-month">
+                <div class="card">
+                    <div class="card-title">This Month</div>
+                    <div class="chart-container">
+                        <canvas id="month-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Monthly Total</div>
+                        <div><span class="kpi-value" id="month-total">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                    <div class="kpi-card success">
+                        <div class="kpi-label">Monthly Deficit</div>
+                        <div><span class="kpi-value" id="month-deficit">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Daily Average</div>
+                        <div><span class="kpi-value" id="month-avg">0</span><span class="kpi-unit">kcal</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Est. Fat Loss</div>
+                        <div><span class="kpi-value" id="month-loss">0</span><span class="kpi-unit">kg</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weight Screen -->
+            <div class="screen" id="screen-weight">
+                <div class="card">
+                    <div class="card-title">Weight Tracking</div>
+                    <div style="margin-bottom: 16px;">
+                        <button class="btn btn-primary btn-small" onclick="app.openWeightEntry()" style="width: auto; margin: 0;">+ Log Weight</button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="weight-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Current</div>
+                        <div><span class="kpi-value" id="weight-current">—</span><span class="kpi-unit">kg</span></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Target</div>
+                        <div><span class="kpi-value" id="weight-target">—</span><span class="kpi-unit">kg</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Progress</div>
+                    <div id="weight-progress" style="font-size: 14px; color: var(--text-secondary);">
+                        <p style="margin-bottom: 8px;"><strong>7-day change:</strong> <span id="weight-7day">—</span></p>
+                        <p style="margin-bottom: 8px;"><strong>30-day change:</strong> <span id="weight-30day">—</span></p>
+                        <p><strong>To target:</strong> <span id="weight-to-target">—</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Screen -->
+            <div class="screen" id="screen-history">
+                <div class="card">
+                    <div class="card-title">Food History</div>
+                    <input type="date" id="history-date-filter" onchange="app.filterHistory()" style="margin-bottom: 12px;">
+                    <div id="history-list"></div>
+                </div>
+            </div>
+
+            <!-- Settings Screen -->
+            <div class="screen" id="screen-settings">
+                <div class="card">
+                    <div class="card-title">Profile</div>
+                    <div class="form-group">
+                        <label>Sex</label>
+                        <select id="settings-sex" onchange="app.updateProfile()">
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Age</label>
+                            <input type="number" id="settings-age" onchange="app.updateProfile()">
+                        </div>
+                        <div class="form-group">
+                            <label>Height (cm)</label>
+                            <input type="number" id="settings-height" onchange="app.updateProfile()">
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Current Weight (kg)</label>
+                            <input type="number" id="settings-weight" onchange="app.updateProfile()" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Target Weight (kg)</label>
+                            <input type="number" id="settings-target-weight" onchange="app.updateProfile()" step="0.1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Activity Level</label>
+                        <select id="settings-activity" onchange="app.updateProfile()">
+                            <option value="sedentary">Sedentary</option>
+                            <option value="light">Lightly Active</option>
+                            <option value="moderate">Moderately Active</option>
+                            <option value="very">Very Active</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Targets</div>
+                    <div class="form-group">
+                        <label>Maintenance Calories (kcal)</label>
+                        <input type="number" id="settings-maintenance" onchange="app.updateProfile()">
+                    </div>
+                    <div class="form-group">
+                        <label>Daily Target (kcal)</label>
+                        <input type="number" id="settings-target" onchange="app.updateProfile()">
+                    </div>
+                    <div class="form-group">
+                        <label>Target Loss Rate (kg/week)</label>
+                        <input type="number" id="settings-loss-rate" onchange="app.updateProfile()" step="0.1" min="0.25" max="1">
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Data</div>
+                    <button class="btn btn-secondary" onclick="app.exportData()" style="width: 100%; margin-bottom: 12px;">📥 Export JSON</button>
+                    <button class="btn btn-secondary" onclick="app.importData()" style="width: 100%;">📤 Import JSON</button>
+                    <input type="file" id="import-file" accept=".json" style="display: none;" onchange="app.processImport(event)">
+                </div>
+
+                <div class="card">
+                    <div class="card-title">About</div>
+                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                        Calorie Deficit Tracker v1.0<br>
+                        Data stored locally in your browser.<br>
+                        No login required.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-tabs">
+            <button class="nav-btn active" onclick="app.switchScreen('today')">
+                <span class="nav-icon">📊</span>
+                <span>Today</span>
+            </button>
+            <button class="nav-btn" onclick="app.switchScreen('week')">
+                <span class="nav-icon">📈</span>
+                <span>Week</span>
+            </button>
+            <button class="nav-btn" onclick="app.switchScreen('month')">
+                <span class="nav-icon">📅</span>
+                <span>Month</span>
+            </button>
+            <button class="nav-btn" onclick="app.switchScreen('weight')">
+                <span class="nav-icon">⚖️</span>
+                <span>Weight</span>
+            </button>
+            <button class="nav-btn" onclick="app.switchScreen('history')">
+                <span class="nav-icon">📝</span>
+                <span>History</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Upload Modal -->
+    <div class="modal" id="modal-upload">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Upload Nutrition Screenshot</h2>
+                <button class="close-btn" onclick="app.closeModal('upload')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="upload-date">
+                </div>
+                <div class="form-group">
+                    <label>Meal Type</label>
+                    <select id="upload-meal-type">
+                        <option value="breakfast">Breakfast</option>
+                        <option value="lunch">Lunch</option>
+                        <option value="dinner">Dinner</option>
+                        <option value="snack">Snack</option>
+                        <option value="drink">Drink</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Image</label>
+                    <input type="file" id="upload-file" accept="image/*" onchange="app.previewImage()">
+                    <img id="upload-preview" style="max-width: 100%; margin-top: 12px; border-radius: 8px; display: none;">
+                </div>
+                <button class="btn btn-primary" onclick="app.extractNutrition()">Extract Nutrition</button>
+                <div id="extraction-result" style="margin-top: 16px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div class="modal" id="modal-review">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Review & Confirm</h2>
+                <button class="close-btn" onclick="app.closeModal('review')">✕</button>
+            </div>
+            <div class="modal-body">
+                <img id="review-image" style="max-width: 100%; margin-bottom: 16px; border-radius: 8px; display: none;">
+                <div id="review-fields"></div>
+                <button class="btn btn-success" onclick="app.saveFoodEntry()" style="width: 100%; margin-top: 16px;">Save Entry</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add Modal -->
+    <div class="modal" id="modal-quick-add">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Quick Add Calories</h2>
+                <button class="close-btn" onclick="app.closeModal('quick-add')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="quick-date">
+                </div>
+                <div class="form-group">
+                    <label>Meal Type</label>
+                    <select id="quick-meal-type">
+                        <option value="breakfast">Breakfast</option>
+                        <option value="lunch">Lunch</option>
+                        <option value="dinner">Dinner</option>
+                        <option value="snack">Snack</option>
+                        <option value="drink">Drink</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Food Name</label>
+                    <input type="text" id="quick-name" placeholder="e.g., Chicken sandwich">
+                </div>
+                <div class="form-group">
+                    <label>Calories (kcal)</label>
+                    <input type="number" id="quick-calories">
+                </div>
+                <div class="form-group">
+                    <label>Protein (g) <span style="color: var(--text-tertiary);">(optional)</span></label>
+                    <input type="number" id="quick-protein" step="0.1">
+                </div>
+                <button class="btn btn-primary" onclick="app.saveQuickAdd()">Add to Log</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Weight Entry Modal -->
+    <div class="modal" id="modal-weight-entry">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Log Weight</h2>
+                <button class="close-btn" onclick="app.closeModal('weight-entry')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="weight-entry-date">
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <input type="time" id="weight-entry-time">
+                </div>
+                <div class="form-group">
+                    <label>Weight (kg)</label>
+                    <input type="number" id="weight-entry-value" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="weight-entry-morning">
+                        Morning weigh-in
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea id="weight-entry-notes" rows="2"></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="app.saveWeightEntry()">Save Weight</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup Wizard Modal -->
+    <div class="modal" id="modal-wizard">
+        <div class="modal-content">
+            <div class="modal-body" style="padding-top: 40px;">
+                <!-- Step 1 -->
+                <div class="wizard-step active" id="wizard-step-1">
+                    <div class="wizard-progress">
+                        <div class="wizard-progress-bar" style="width: 20%;"></div>
+                    </div>
+                    <div class="wizard-title">Welcome</div>
+                    <div class="wizard-subtitle">Let's set up your profile to get started</div>
+                    <div class="form-group">
+                        <label>Sex</label>
+                        <select id="wizard-sex">
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Age</label>
+                        <input type="number" id="wizard-age" placeholder="e.g., 30">
+                    </div>
+                    <div class="form-group">
+                        <label>Height (cm)</label>
+                        <input type="number" id="wizard-height" placeholder="e.g., 180">
+                    </div>
+                    <button class="btn btn-primary" onclick="app.nextWizardStep()">Next</button>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="wizard-step" id="wizard-step-2">
+                    <div class="wizard-progress">
+                        <div class="wizard-progress-bar" style="width: 40%;"></div>
+                    </div>
+                    <div class="wizard-title">Current Status</div>
+                    <div class="wizard-subtitle">Where are you starting from?</div>
+                    <div class="form-group">
+                        <label>Current Weight (kg)</label>
+                        <input type="number" id="wizard-current-weight" placeholder="e.g., 85" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Target Weight (kg)</label>
+                        <input type="number" id="wizard-target-weight" placeholder="e.g., 75" step="0.1">
+                    </div>
+                    <button class="btn btn-primary" onclick="app.nextWizardStep()">Next</button>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="wizard-step" id="wizard-step-3">
+                    <div class="wizard-progress">
+                        <div class="wizard-progress-bar" style="width: 60%;"></div>
+                    </div>
+                    <div class="wizard-title">Activity Level</div>
+                    <div class="wizard-subtitle">How active are you?</div>
+                    <div class="form-group">
+                        <select id="wizard-activity">
+                            <option value="sedentary">Sedentary (little to no exercise)</option>
+                            <option value="light">Lightly Active (1-3 days/week)</option>
+                            <option value="moderate" selected>Moderately Active (3-5 days/week)</option>
+                            <option value="very">Very Active (6-7 days/week)</option>
+                        </select>
+                    </div>
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                        <p><strong id="est-maintenance">2000</strong> kcal/day (estimated maintenance)</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.nextWizardStep()">Next</button>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="wizard-step" id="wizard-step-4">
+                    <div class="wizard-progress">
+                        <div class="wizard-progress-bar" style="width: 80%;"></div>
+                    </div>
+                    <div class="wizard-title">Calorie Target</div>
+                    <div class="wizard-subtitle">Set your daily goal</div>
+                    <div class="form-group">
+                        <label>Daily Calorie Target (kcal)</label>
+                        <input type="number" id="wizard-target" placeholder="e.g., 1800">
+                    </div>
+                    <div class="form-group">
+                        <label>Target Loss Rate (kg/week)</label>
+                        <select id="wizard-loss-rate">
+                            <option value="0.25">0.25 kg/week (conservative)</option>
+                            <option value="0.5" selected>0.5 kg/week (standard)</option>
+                            <option value="0.75">0.75 kg/week (aggressive)</option>
+                            <option value="1">1 kg/week (very aggressive)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.nextWizardStep()">Next</button>
+                </div>
+
+                <!-- Step 5 -->
+                <div class="wizard-step" id="wizard-step-5">
+                    <div class="wizard-progress">
+                        <div class="wizard-progress-bar" style="width: 100%;"></div>
+                    </div>
+                    <div class="wizard-title">All Set!</div>
+                    <div class="wizard-subtitle">You're ready to start tracking</div>
+                    <div style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                        <p style="font-size: 12px; color: #065f46; margin-bottom: 8px;"><strong>Your target: <span id="summary-target">1800</span> kcal/day</strong></p>
+                        <p style="font-size: 11px; color: #065f46;">This creates a deficit of ~<span id="summary-deficit">200</span> kcal/day</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.completeWizard()">Start Tracking</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // IndexedDB Setup
+        const DB_NAME = 'CalorieTracker';
+        const DB_VERSION = 1;
+        let db;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve(db);
+                };
+                
+                request.onupgradeneeded = (e) => {
+                    const database = e.target.result;
+                    
+                    if (!database.objectStoreNames.contains('profile')) {
+                        database.createObjectStore('profile', { keyPath: 'id' });
+                    }
+                    if (!database.objectStoreNames.contains('foodEntries')) {
+                        const store = database.createObjectStore('foodEntries', { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('date', 'date');
+                    }
+                    if (!database.objectStoreNames.contains('weightEntries')) {
+                        const store = database.createObjectStore('weightEntries', { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('date', 'date');
+                    }
+                };
+            });
+        }
+
+        // Main App
+        const app = {
+            currentScreen: 'today',
+            profile: null,
+            charts: {},
+            currentReviewData: null,
+
+            async init() {
+                await initDB();
+                this.loadProfile();
+                this.updateDate();
+                this.refreshToday();
+                setInterval(() => this.updateDate(), 60000);
+            },
+
+            updateDate() {
+                const today = new Date();
+                document.getElementById('header-date').textContent = today.toLocaleDateString('en-US', { 
+                    weekday: 'short', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                
+                // Set default dates in forms
+                document.getElementById('upload-date').valueAsDate = today;
+                document.getElementById('quick-date').valueAsDate = today;
+                document.getElementById('weight-entry-date').valueAsDate = today;
+                document.getElementById('history-date-filter').valueAsDate = today;
+                
+                const now = new Date().toTimeString().slice(0, 5);
+                document.getElementById('weight-entry-time').value = now;
+            },
+
+            async loadProfile() {
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['profile'], 'readonly');
+                    const store = transaction.objectStore('profile');
+                    const request = store.get('default');
+                    
+                    request.onsuccess = () => {
+                        if (request.result) {
+                            this.profile = request.result;
+                            this.populateSettings();
+                            this.refreshAll();
+                            resolve();
+                        } else {
+                            this.showWizard();
+                            resolve();
+                        }
+                    };
+                });
+            },
+
+            showWizard() {
+                document.getElementById('modal-wizard').classList.add('active');
+            },
+
+            nextWizardStep() {
+                const currentStep = document.querySelector('.wizard-step.active');
+                const stepNum = parseInt(currentStep.id.split('-')[2]);
+                const nextStep = document.getElementById(`wizard-step-${stepNum + 1}`);
+                
+                if (nextStep) {
+                    currentStep.classList.remove('active');
+                    nextStep.classList.add('active');
+
+                    // Update maintenance estimate
+                    if (stepNum === 2) {
+                        this.updateMaintenanceEstimate();
+                    }
+
+                    // Update summary on final step
+                    if (stepNum === 3) {
+                        const target = document.getElementById('wizard-target').value || 1800;
+                        const maintenance = this.profile?.maintenance_kcal || 2000;
+                        document.getElementById('summary-target').textContent = target;
+                        document.getElementById('summary-deficit').textContent = Math.abs(maintenance - target);
+                    }
+                }
+            },
+
+            updateMaintenanceEstimate() {
+                const sex = document.getElementById('wizard-sex').value;
+                const age = parseInt(document.getElementById('wizard-age').value) || 30;
+                const height = parseInt(document.getElementById('wizard-height').value) || 170;
+                const weight = parseInt(document.getElementById('wizard-current-weight').value) || 75;
+                const activity = document.getElementById('wizard-activity').value;
+
+                // Mifflin-St Jeor equation
+                let bmr;
+                if (sex === 'male') {
+                    bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+                } else {
+                    bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+                }
+
+                const activityFactors = {
+                    sedentary: 1.2,
+                    light: 1.375,
+                    moderate: 1.55,
+                    very: 1.725
+                };
+
+                const maintenance = Math.round(bmr * (activityFactors[activity] || 1.55));
+                document.getElementById('est-maintenance').textContent = maintenance;
+            },
+
+            completeWizard() {
+                const profile = {
+                    id: 'default',
+                    sex: document.getElementById('wizard-sex').value,
+                    age: parseInt(document.getElementById('wizard-age').value),
+                    height_cm: parseInt(document.getElementById('wizard-height').value),
+                    current_weight_kg: parseFloat(document.getElementById('wizard-current-weight').value),
+                    target_weight_kg: parseFloat(document.getElementById('wizard-target-weight').value),
+                    activity_level: document.getElementById('wizard-activity').value,
+                    maintenance_kcal: parseInt(document.getElementById('est-maintenance').textContent),
+                    target_kcal: parseInt(document.getElementById('wizard-target').value),
+                    target_loss_rate_kg_per_week: parseFloat(document.getElementById('wizard-loss-rate').value),
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+
+                this.saveProfile(profile);
+                document.getElementById('modal-wizard').classList.remove('active');
+            },
+
+            saveProfile(profile) {
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['profile'], 'readwrite');
+                    const store = transaction.objectStore('profile');
+                    store.put(profile);
+                    
+                    transaction.oncomplete = () => {
+                        this.profile = profile;
+                        this.populateSettings();
+                        this.refreshAll();
+                        resolve();
+                    };
+                });
+            },
+
+            populateSettings() {
+                if (!this.profile) return;
+                document.getElementById('settings-sex').value = this.profile.sex;
+                document.getElementById('settings-age').value = this.profile.age;
+                document.getElementById('settings-height').value = this.profile.height_cm;
+                document.getElementById('settings-weight').value = this.profile.current_weight_kg;
+                document.getElementById('settings-target-weight').value = this.profile.target_weight_kg;
+                document.getElementById('settings-activity').value = this.profile.activity_level;
+                document.getElementById('settings-maintenance').value = this.profile.maintenance_kcal;
+                document.getElementById('settings-target').value = this.profile.target_kcal;
+                document.getElementById('settings-loss-rate').value = this.profile.target_loss_rate_kg_per_week;
+            },
+
+            updateProfile() {
+                const profile = {
+                    ...this.profile,
+                    sex: document.getElementById('settings-sex').value,
+                    age: parseInt(document.getElementById('settings-age').value),
+                    height_cm: parseInt(document.getElementById('settings-height').value),
+                    current_weight_kg: parseFloat(document.getElementById('settings-weight').value),
+                    target_weight_kg: parseFloat(document.getElementById('settings-target-weight').value),
+                    activity_level: document.getElementById('settings-activity').value,
+                    maintenance_kcal: parseInt(document.getElementById('settings-maintenance').value),
+                    target_kcal: parseInt(document.getElementById('settings-target').value),
+                    target_loss_rate_kg_per_week: parseFloat(document.getElementById('settings-loss-rate').value),
+                    updated_at: new Date().toISOString()
+                };
+                this.saveProfile(profile);
+            },
+
+            switchScreen(screenName) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById(`screen-${screenName}`).classList.add('active');
+                
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                event.target.closest('.nav-btn').classList.add('active');
+                
+                this.currentScreen = screenName;
+                
+                const titles = {
+                    today: 'Today',
+                    week: 'This Week',
+                    month: 'This Month',
+                    weight: 'Weight',
+                    history: 'History'
+                };
+                document.getElementById('header-title').textContent = titles[screenName];
+
+                if (screenName === 'week') this.refreshWeek();
+                if (screenName === 'month') this.refreshMonth();
+                if (screenName === 'weight') this.refreshWeight();
+                if (screenName === 'history') this.refreshHistory();
+            },
+
+            async refreshAll() {
+                this.refreshToday();
+                this.refreshWeek();
+                this.refreshMonth();
+                this.refreshWeight();
+                this.refreshHistory();
+            },
+
+            async getFoodEntries(date) {
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['foodEntries'], 'readonly');
+                    const store = transaction.objectStore('foodEntries');
+                    const index = store.index('date');
+                    const request = index.getAll(date);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            },
+
+            async getAllFoodEntries() {
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['foodEntries'], 'readonly');
+                    const store = transaction.objectStore('foodEntries');
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                });
+            },
+
+            async getWeightEntries(startDate, endDate) {
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['weightEntries'], 'readonly');
+                    const store = transaction.objectStore('weightEntries');
+                    const index = store.index('date');
+                    const range = IDBKeyRange.bound(startDate, endDate);
+                    const request = index.getAll(range);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            },
+
+            async refreshToday() {
+                const today = new Date().toISOString().split('T')[0];
+                const entries = await this.getFoodEntries(today);
+                
+                const consumed = entries.reduce((sum, e) => sum + (e.calories || 0), 0);
+                const protein = entries.reduce((sum, e) => sum + (e.protein_g || 0), 0);
+                const carbs = entries.reduce((sum, e) => sum + (e.carbs_g || 0), 0);
+                const fat = entries.reduce((sum, e) => sum + (e.fat_g || 0), 0);
+                
+                const target = this.profile?.target_kcal || 2000;
+                const remaining = target - consumed;
+                const maintenance = this.profile?.maintenance_kcal || 2500;
+                const deficit = maintenance - consumed;
+
+                // Update KPIs
+                document.getElementById('today-consumed').textContent = consumed;
+                document.getElementById('today-target').textContent = target;
+                document.getElementById('today-remaining').textContent = remaining;
+                document.getElementById('today-deficit').textContent = Math.round(deficit);
+                
+                // Color code remaining
+                const remainingCard = document.getElementById('remaining-card');
+                remainingCard.className = 'kpi-card';
+                if (remaining > 0) {
+                    remainingCard.classList.add('success');
+                } else if (remaining < -200) {
+                    remainingCard.classList.add('danger');
+                } else {
+                    remainingCard.classList.add('warning');
+                }
+
+                // Color code deficit
+                const deficitCard = document.getElementById('deficit-card');
+                deficitCard.className = 'kpi-card';
+                if (deficit > 0) {
+                    deficitCard.classList.add('success');
+                } else {
+                    deficitCard.classList.add('warning');
+                }
+
+                // Macros
+                document.getElementById('macro-protein').textContent = Math.round(protein) + 'g';
+                document.getElementById('macro-carbs').textContent = Math.round(carbs) + 'g';
+                document.getElementById('macro-fat').textContent = Math.round(fat) + 'g';
+
+                // Meals
+                const mealsHtml = this.groupMealsByType(entries).map(group => `
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">${group.type}</div>
+                        ${group.entries.map(e => `
+                            <div class="meal-entry">
+                                <div class="meal-info">
+                                    <div class="meal-name">${e.food_name}</div>
+                                    <div class="meal-details">${e.brand || ''}</div>
+                                </div>
+                                <div class="meal-cal">${e.calories}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('');
+                document.getElementById('today-meals').innerHTML = mealsHtml || '<p style="color: var(--text-secondary); font-size: 12px;">No meals logged yet</p>';
+
+                // Latest weight
+                const allWeights = await this.getWeightEntries('2000-01-01', today);
+                if (allWeights.length > 0) {
+                    const latest = allWeights[allWeights.length - 1];
+                    document.getElementById('today-weight').textContent = latest.weight_kg + ' kg';
+                }
+            },
+
+            groupMealsByType(entries) {
+                const types = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'];
+                return types.map(type => ({
+                    type: type.charAt(0).toUpperCase() + type.slice(1),
+                    entries: entries.filter(e => e.meal_type === type)
+                })).filter(g => g.entries.length > 0);
+            },
+
+            async refreshWeek() {
+                const today = new Date();
+                const weekStart = new Date(today);
+                weekStart.setDate(today.getDate() - today.getDay());
+                
+                const days = [];
+                const dailyTotals = [];
+                
+                for (let i = 0; i < 7; i++) {
+                    const date = new Date(weekStart);
+                    date.setDate(weekStart.getDate() + i);
+                    const dateStr = date.toISOString().split('T')[0];
+                    const entries = await this.getFoodEntries(dateStr);
+                    const consumed = entries.reduce((sum, e) => sum + (e.calories || 0), 0);
+                    
+                    days.push(dateStr);
+                    dailyTotals.push(consumed);
+                }
+
+                const maintenance = this.profile?.maintenance_kcal || 2500;
+                const deficits = dailyTotals.map(c => maintenance - c);
+                const weekTotal = dailyTotals.reduce((a, b) => a + b, 0);
+                const weekDeficit = deficits.reduce((a, b) => a + b, 0);
+                const avgDaily = Math.round(weekTotal / 7);
+
+                document.getElementById('week-total').textContent = weekTotal;
+                document.getElementById('week-deficit').textContent = Math.round(weekDeficit);
+                document.getElementById('week-avg').textContent = avgDaily;
+                document.getElementById('week-loss').textContent = (weekDeficit / 7700).toFixed(2);
+
+                // Chart
+                this.createChart('week-chart', 'bar', {
+                    labels: days.map(d => new Date(d).toLocaleDateString('en-US', { weekday: 'short' })),
+                    datasets: [{
+                        label: 'Calories',
+                        data: dailyTotals,
+                        backgroundColor: 'rgba(14, 165, 233, 0.5)',
+                        borderColor: 'rgba(14, 165, 233, 1)',
+                        borderWidth: 1
+                    }]
+                });
+            },
+
+            async refreshMonth() {
+                const today = new Date();
+                const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                
+                const allEntries = await this.getAllFoodEntries();
+                const monthEntries = allEntries.filter(e => {
+                    const d = new Date(e.date);
+                    return d >= monthStart && d <= monthEnd;
+                });
+
+                const monthTotal = monthEntries.reduce((sum, e) => sum + (e.calories || 0), 0);
+                const maintenance = this.profile?.maintenance_kcal || 2500;
+                const daysInMonth = monthEnd.getDate();
+                const avgDaily = Math.round(monthTotal / daysInMonth);
+                const monthDeficit = (maintenance * daysInMonth) - monthTotal;
+
+                document.getElementById('month-total').textContent = monthTotal;
+                document.getElementById('month-deficit').textContent = Math.round(monthDeficit);
+                document.getElementById('month-avg').textContent = avgDaily;
+                document.getElementById('month-loss').textContent = (monthDeficit / 7700).toFixed(2);
+
+                // Group by day
+                const dailyMap = {};
+                for (let i = 1; i <= daysInMonth; i++) {
+                    const dateStr = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    dailyMap[i] = monthEntries.filter(e => e.date === dateStr).reduce((sum, e) => sum + (e.calories || 0), 0);
+                }
+
+                // Chart
+                this.createChart('month-chart', 'line', {
+                    labels: Array.from({length: daysInMonth}, (_, i) => i + 1),
+                    datasets: [{
+                        label: 'Daily Calories',
+                        data: Array.from({length: daysInMonth}, (_, i) => dailyMap[i + 1]),
+                        borderColor: 'rgba(14, 165, 233, 1)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                });
+            },
+
+            async refreshWeight() {
+                const allWeights = await this.getWeightEntries('2000-01-01', '2099-12-31');
+                
+                if (allWeights.length === 0) {
+                    document.getElementById('weight-current').textContent = '—';
+                    document.getElementById('weight-7day').textContent = '—';
+                    document.getElementById('weight-30day').textContent = '—';
+                    document.getElementById('weight-to-target').textContent = '—';
+                    return;
+                }
+
+                const latest = allWeights[allWeights.length - 1];
+                document.getElementById('weight-current').textContent = latest.weight_kg.toFixed(1);
+                document.getElementById('weight-target').textContent = this.profile?.target_weight_kg.toFixed(1) || '—';
+
+                const today = new Date();
+                const sevenDaysAgo = new Date(today);
+                sevenDaysAgo.setDate(today.getDate() - 7);
+                const thirtyDaysAgo = new Date(today);
+                thirtyDaysAgo.setDate(today.getDate() - 30);
+
+                const sevenDayChange = allWeights.filter(w => new Date(w.date) >= sevenDaysAgo);
+                const thirtyDayChange = allWeights.filter(w => new Date(w.date) >= thirtyDaysAgo);
+
+                if (sevenDayChange.length > 0) {
+                    const change = latest.weight_kg - sevenDayChange[0].weight_kg;
+                    document.getElementById('weight-7day').textContent = change > 0 ? `+${change.toFixed(1)} kg` : `${change.toFixed(1)} kg`;
+                }
+
+                if (thirtyDayChange.length > 0) {
+                    const change = latest.weight_kg - thirtyDayChange[0].weight_kg;
+                    document.getElementById('weight-30day').textContent = change > 0 ? `+${change.toFixed(1)} kg` : `${change.toFixed(1)} kg`;
+                }
+
+                const toTarget = latest.weight_kg - (this.profile?.target_weight_kg || 0);
+                document.getElementById('weight-to-target').textContent = toTarget > 0 ? `${toTarget.toFixed(1)} kg` : 'Target reached!';
+
+                // Chart
+                this.createChart('weight-chart', 'line', {
+                    labels: allWeights.map(w => new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                    datasets: [{
+                        label: 'Weight (kg)',
+                        data: allWeights.map(w => w.weight_kg),
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                });
+            },
+
+            async refreshHistory() {
+                const dateFilter = document.getElementById('history-date-filter').value;
+                const entries = await this.getFoodEntries(dateFilter);
+                
+                const html = entries.map(e => `
+                    <div class="meal-entry">
+                        <div class="meal-info">
+                            <div class="meal-name">${e.food_name}</div>
+                            <div class="meal-details">${e.meal_type} • ${e.brand || 'Manual'}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="meal-cal">${e.calories} kcal</div>
+                            <button class="btn btn-small btn-secondary" onclick="app.deleteFood(${e.id})">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                document.getElementById('history-list').innerHTML = html || '<p style="color: var(--text-secondary); font-size: 12px;">No entries for this date</p>';
+            },
+
+            filterHistory() {
+                this.refreshHistory();
+            },
+
+            createChart(elementId, type, data) {
+                if (this.charts[elementId]) {
+                    this.charts[elementId].destroy();
+                }
+                
+                const ctx = document.getElementById(elementId).getContext('2d');
+                this.charts[elementId] = new Chart(ctx, {
+                    type: type,
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            },
+
+            // Modals
+            openModal(name) {
+                document.getElementById(`modal-${name}`).classList.add('active');
+            },
+
+            closeModal(name) {
+                document.getElementById(`modal-${name}`).classList.remove('active');
+            },
+
+            openSettings() {
+                this.switchScreen('settings');
+            },
+
+            openUpload() {
+                this.openModal('upload');
+            },
+
+            openQuickAdd() {
+                document.getElementById('quick-date').valueAsDate = new Date();
+                this.openModal('quick-add');
+            },
+
+            openWeightEntry() {
+                document.getElementById('weight-entry-date').valueAsDate = new Date();
+                document.getElementById('weight-entry-time').value = new Date().toTimeString().slice(0, 5);
+                this.openModal('weight-entry');
+            },
+
+            previewImage() {
+                const file = document.getElementById('upload-file').files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        document.getElementById('upload-preview').src = e.target.result;
+                        document.getElementById('upload-preview').style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            },
+
+            async extractNutrition() {
+                const file = document.getElementById('upload-file').files[0];
+                if (!file) {
+                    alert('Please select an image');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const base64 = e.target.result.split(',')[1];
+                    const resultDiv = document.getElementById('extraction-result');
+                    resultDiv.innerHTML = '<div class="loading" style="margin: 16px auto;"></div> Extracting...';
+
+                    try {
+                        // Call Cloudflare Worker endpoint
+                        const response = await fetch('https://calorie-extractor.dbeale75.workers.dev/api/extract-nutrition', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                image_base64: base64,
+                                filename: file.name,
+                                meal_type: document.getElementById('upload-meal-type').value,
+                                date: document.getElementById('upload-date').value
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Extraction failed');
+                        }
+
+                        const data = await response.json();
+                        this.currentReviewData = {
+                            ...data,
+                            date: document.getElementById('upload-date').value,
+                            meal_type: document.getElementById('upload-meal-type').value,
+                            image_base64: base64
+                        };
+
+                        this.showReview();
+                    } catch (err) {
+                        resultDiv.innerHTML = '<p style="color: var(--accent-danger); font-size: 12px;">⚠️ Could not extract nutrition. Please review manually.</p>' +
+                            '<div class="form-group"><label>Food Name</label><input type="text" id="manual-name" placeholder="e.g., Chicken sandwich"></div>' +
+                            '<div class="form-group"><label>Calories</label><input type="number" id="manual-calories" placeholder="e.g., 450"></div>' +
+                            '<button class="btn btn-primary" onclick="app.saveManualEntry()">Save Entry</button>';
+                    }
+                };
+                reader.readAsDataURL(file);
+            },
+
+            showReview() {
+                const data = this.currentReviewData;
+                
+                const fieldsHtml = `
+                    <div class="form-group">
+                        <label>Food Name</label>
+                        <input type="text" id="review-name" value="${data.food_name || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Brand</label>
+                        <input type="text" id="review-brand" value="${data.brand || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Serving Size</label>
+                        <input type="text" id="review-serving" value="${data.serving_size_text || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Calories (kcal)</label>
+                        <input type="number" id="review-calories" value="${data.calories_kcal || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Protein (g)</label>
+                        <input type="number" id="review-protein" value="${data.protein_g || ''}" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Carbs (g)</label>
+                        <input type="number" id="review-carbs" value="${data.carbs_g || ''}" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Fat (g)</label>
+                        <input type="number" id="review-fat" value="${data.fat_g || ''}" step="0.1">
+                    </div>
+                    ${data.confidence ? `<p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;">Confidence: ${Math.round(data.confidence * 100)}%</p>` : ''}
+                    ${data.warnings && data.warnings.length ? `<p style="font-size: 11px; color: var(--accent-warning); margin-bottom: 12px;">⚠️ ${data.warnings.join(', ')}</p>` : ''}
+                `;
+                
+                document.getElementById('review-fields').innerHTML = fieldsHtml;
+                if (data.image_base64) {
+                    document.getElementById('review-image').src = 'data:image/jpeg;base64,' + data.image_base64;
+                    document.getElementById('review-image').style.display = 'block';
+                }
+                
+                this.closeModal('upload');
+                this.openModal('review');
+            },
+
+            saveFoodEntry() {
+                const entry = {
+                    date: this.currentReviewData.date,
+                    time: new Date().toTimeString().slice(0, 5),
+                    meal_type: this.currentReviewData.meal_type,
+                    food_name: document.getElementById('review-name').value,
+                    brand: document.getElementById('review-brand').value,
+                    serving_description: document.getElementById('review-serving').value,
+                    calories: parseInt(document.getElementById('review-calories').value) || 0,
+                    protein_g: parseFloat(document.getElementById('review-protein').value) || null,
+                    carbs_g: parseFloat(document.getElementById('review-carbs').value) || null,
+                    fat_g: parseFloat(document.getElementById('review-fat').value) || null,
+                    source_type: 'image',
+                    ocr_confidence: this.currentReviewData.confidence,
+                    created_at: new Date().toISOString()
+                };
+
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['foodEntries'], 'readwrite');
+                    const store = transaction.objectStore('foodEntries');
+                    store.add(entry);
+                    
+                    transaction.oncomplete = () => {
+                        this.closeModal('review');
+                        this.refreshAll();
+                        resolve();
+                    };
+                });
+            },
+
+            saveManualEntry() {
+                const entry = {
+                    date: this.currentReviewData.date,
+                    time: new Date().toTimeString().slice(0, 5),
+                    meal_type: this.currentReviewData.meal_type,
+                    food_name: document.getElementById('manual-name').value,
+                    calories: parseInt(document.getElementById('manual-calories').value) || 0,
+                    source_type: 'manual',
+                    created_at: new Date().toISOString()
+                };
+
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['foodEntries'], 'readwrite');
+                    const store = transaction.objectStore('foodEntries');
+                    store.add(entry);
+                    
+                    transaction.oncomplete = () => {
+                        this.closeModal('review');
+                        this.refreshAll();
+                        resolve();
+                    };
+                });
+            },
+
+            saveQuickAdd() {
+                const entry = {
+                    date: document.getElementById('quick-date').value,
+                    time: new Date().toTimeString().slice(0, 5),
+                    meal_type: document.getElementById('quick-meal-type').value,
+                    food_name: document.getElementById('quick-name').value,
+                    calories: parseInt(document.getElementById('quick-calories').value) || 0,
+                    protein_g: parseFloat(document.getElementById('quick-protein').value) || null,
+                    source_type: 'manual',
+                    created_at: new Date().toISOString()
+                };
+
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['foodEntries'], 'readwrite');
+                    const store = transaction.objectStore('foodEntries');
+                    store.add(entry);
+                    
+                    transaction.oncomplete = () => {
+                        document.getElementById('quick-name').value = '';
+                        document.getElementById('quick-calories').value = '';
+                        document.getElementById('quick-protein').value = '';
+                        this.closeModal('quick-add');
+                        this.refreshAll();
+                        resolve();
+                    };
+                });
+            },
+
+            saveWeightEntry() {
+                const entry = {
+                    date: document.getElementById('weight-entry-date').value,
+                    time: document.getElementById('weight-entry-time').value,
+                    weight_kg: parseFloat(document.getElementById('weight-entry-value').value),
+                    is_morning: document.getElementById('weight-entry-morning').checked,
+                    note: document.getElementById('weight-entry-notes').value,
+                    created_at: new Date().toISOString()
+                };
+
+                return new Promise((resolve) => {
+                    const transaction = db.transaction(['weightEntries'], 'readwrite');
+                    const store = transaction.objectStore('weightEntries');
+                    store.add(entry);
+                    
+                    transaction.oncomplete = () => {
+                        this.closeModal('weight-entry');
+                        this.refreshAll();
+                        resolve();
+                    };
+                });
+            },
+
+            deleteFood(id) {
+                if (confirm('Delete this entry?')) {
+                    const transaction = db.transaction(['foodEntries'], 'readwrite');
+                    const store = transaction.objectStore('foodEntries');
+                    store.delete(id);
+                    
+                    transaction.oncomplete = () => {
+                        this.refreshAll();
+                    };
+                }
+            },
+
+            exportData() {
+                Promise.all([
+                    new Promise((resolve) => {
+                        const transaction = db.transaction(['foodEntries'], 'readonly');
+                        const store = transaction.objectStore('foodEntries');
+                        const request = store.getAll();
+                        request.onsuccess = () => resolve(request.result);
+                    }),
+                    new Promise((resolve) => {
+                        const transaction = db.transaction(['weightEntries'], 'readonly');
+                        const store = transaction.objectStore('weightEntries');
+                        const request = store.getAll();
+                        request.onsuccess = () => resolve(request.result);
+                    })
+                ]).then(([foods, weights]) => {
+                    const data = {
+                        profile: this.profile,
+                        foodEntries: foods,
+                        weightEntries: weights,
+                        exportedAt: new Date().toISOString()
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `calorie-tracker-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            },
+
+            importData() {
+                document.getElementById('import-file').click();
+            },
+
+            processImport(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        
+                        const transaction = db.transaction(['profile', 'foodEntries', 'weightEntries'], 'readwrite');
+                        
+                        if (data.profile) {
+                            transaction.objectStore('profile').put(data.profile);
+                        }
+                        
+                        if (data.foodEntries) {
+                            data.foodEntries.forEach(entry => {
+                                delete entry.id;
+                                transaction.objectStore('foodEntries').add(entry);
+                            });
+                        }
+                        
+                        if (data.weightEntries) {
+                            data.weightEntries.forEach(entry => {
+                                delete entry.id;
+                                transaction.objectStore('weightEntries').add(entry);
+                            });
+                        }
+                        
+                        transaction.oncomplete = () => {
+                            alert('Data imported successfully');
+                            this.loadProfile();
+                        };
+                    } catch (err) {
+                        alert('Invalid file format');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        };
+
+        // Initialize
+        app.init();
+    </script>
+</body>
+</html>

@@ -89,6 +89,23 @@
             color: var(--text-secondary);
         }
 
+        .date-filter {
+            margin-bottom: 12px;
+        }
+
+        .date-filter-label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .date-filter-help {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            margin-bottom: 8px;
+        }
+
         /* Navigation */
         .nav-tabs {
             position: fixed;
@@ -575,6 +592,10 @@
         <div class="content">
             <!-- Today Screen -->
             <div class="screen active" id="screen-today">
+                <label for="today-date-filter" class="date-filter-label">View date</label>
+                <input type="date" id="today-date-filter" class="date-filter" aria-label="Select date to view" aria-describedby="today-date-help" onchange="app.setViewDate(this.value)">
+                <div id="today-date-help" class="date-filter-help">Tip: use arrow keys to navigate dates in the picker.</div>
+
                 <div class="kpi-grid">
                     <div class="kpi-card">
                         <div class="kpi-label">Consumed</div>
@@ -1118,22 +1139,53 @@
             profile: null,
             charts: {},
             currentReviewData: null,
+            selectedTodayDate: null,
 
             async init() {
                 await initDB();
                 this.loadProfile();
+                this.selectedTodayDate = this.getCurrentDateString();
                 this.updateDate();
                 this.refreshToday();
                 setInterval(() => this.updateDate(), 60000);
             },
 
+            getCurrentDateString() {
+                const d = new Date();
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+
+            formatDisplayDate(dateString) {
+                if (!this.isValidDateString(dateString)) {
+                    dateString = this.getCurrentDateString();
+                }
+                const [year, month, day] = dateString.split('-').map(Number);
+                return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            },
+
+            isValidDateString(dateString) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false;
+                const [year, month, day] = dateString.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+            },
+
             updateDate() {
                 const today = new Date();
-                document.getElementById('header-date').textContent = today.toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
+                if (!this.selectedTodayDate) {
+                    this.selectedTodayDate = this.getCurrentDateString();
+                }
+
+                document.getElementById('header-date').textContent = this.formatDisplayDate(this.selectedTodayDate);
+                document.getElementById('today-date-filter').value = this.selectedTodayDate;
+                document.getElementById('today-date-filter').max = this.getCurrentDateString();
                 
                 // Set default dates in forms
                 document.getElementById('upload-date').valueAsDate = today;
@@ -1143,6 +1195,13 @@
                 
                 const now = new Date().toTimeString().slice(0, 5);
                 document.getElementById('weight-entry-time').value = now;
+            },
+
+            setViewDate(date) {
+                if (!this.isValidDateString(date)) return;
+                this.selectedTodayDate = date;
+                this.updateDate();
+                this.refreshToday();
             },
 
             async loadProfile() {
@@ -1347,8 +1406,8 @@
             },
 
             async refreshToday() {
-                const today = new Date().toISOString().split('T')[0];
-                const entries = await this.getFoodEntries(today);
+                const selectedDate = this.selectedTodayDate || this.getCurrentDateString();
+                const entries = await this.getFoodEntries(selectedDate);
                 
                 const consumed = entries.reduce((sum, e) => sum + (e.calories || 0), 0);
                 const protein = entries.reduce((sum, e) => sum + (e.protein_g || 0), 0);
@@ -1409,10 +1468,12 @@
                 document.getElementById('today-meals').innerHTML = mealsHtml || '<p style="color: var(--text-secondary); font-size: 12px;">No meals logged yet</p>';
 
                 // Latest weight
-                const allWeights = await this.getWeightEntries('2000-01-01', today);
+                const allWeights = await this.getWeightEntries('2000-01-01', selectedDate);
                 if (allWeights.length > 0) {
                     const latest = allWeights[allWeights.length - 1];
                     document.getElementById('today-weight').textContent = latest.weight_kg + ' kg';
+                } else {
+                    document.getElementById('today-weight').textContent = 'No weight logged yet';
                 }
             },
 

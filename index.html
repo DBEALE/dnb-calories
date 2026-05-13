@@ -1451,9 +1451,14 @@
                 document.getElementById('macro-fat').textContent = Math.round(fat) + 'g';
 
                 // Meals
-                const mealsHtml = this.groupMealsByType(entries).map(group => `
+                const mealsHtml = this.groupMealsByType(entries).map(group => {
+                    const groupTotal = group.entries.reduce((sum, e) => sum + (e.calories || 0), 0);
+                    return `
                     <div style="margin-bottom: 12px;">
-                        <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">${group.type}</div>
+                        <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>${group.type}</span>
+                            <span style="font-size: 13px; color: var(--text-primary);">${groupTotal} kcal</span>
+                        </div>
                         ${group.entries.map(e => `
                             <div class="meal-entry">
                                 <div class="meal-info">
@@ -1464,7 +1469,8 @@
                             </div>
                         `).join('')}
                     </div>
-                `).join('');
+                    `;
+                }).join('');
                 document.getElementById('today-meals').innerHTML = mealsHtml || '<p style="color: var(--text-secondary); font-size: 12px;">No meals logged yet</p>';
 
                 // Latest weight
@@ -1489,9 +1495,20 @@
                 const today = new Date();
                 const weekStart = new Date(today);
                 weekStart.setDate(today.getDate() - today.getDay());
+
+                const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'];
+                const mealColors = {
+                    breakfast: 'rgba(245, 158, 11, 1)',
+                    lunch:     'rgba(16, 185, 129, 1)',
+                    dinner:    'rgba(239, 68, 68, 1)',
+                    snack:     'rgba(168, 85, 247, 1)',
+                    drink:     'rgba(20, 184, 166, 1)'
+                };
                 
                 const days = [];
                 const dailyTotals = [];
+                const mealTypeTotals = {};
+                mealTypes.forEach(t => { mealTypeTotals[t] = []; });
                 
                 for (let i = 0; i < 7; i++) {
                     const date = new Date(weekStart);
@@ -1502,6 +1519,11 @@
                     
                     days.push(dateStr);
                     dailyTotals.push(consumed);
+                    mealTypes.forEach(type => {
+                        mealTypeTotals[type].push(
+                            entries.filter(e => e.meal_type === type).reduce((sum, e) => sum + (e.calories || 0), 0)
+                        );
+                    });
                 }
 
                 const maintenance = this.profile?.maintenance_kcal || 2500;
@@ -1515,17 +1537,38 @@
                 document.getElementById('week-avg').textContent = avgDaily;
                 document.getElementById('week-loss').textContent = (weekDeficit / 7700).toFixed(2);
 
+                // Build meal-type line datasets (only for types that have any data this week)
+                const mealDatasets = mealTypes
+                    .filter(type => mealTypeTotals[type].some(v => v > 0))
+                    .map(type => ({
+                        label: type.charAt(0).toUpperCase() + type.slice(1),
+                        data: mealTypeTotals[type],
+                        type: 'line',
+                        borderColor: mealColors[type],
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        tension: 0.3,
+                        fill: false,
+                        order: 1
+                    }));
+
                 // Chart
                 this.createChart('week-chart', 'bar', {
                     labels: days.map(d => new Date(d).toLocaleDateString('en-US', { weekday: 'short' })),
-                    datasets: [{
-                        label: 'Calories',
-                        data: dailyTotals,
-                        backgroundColor: 'rgba(14, 165, 233, 0.5)',
-                        borderColor: 'rgba(14, 165, 233, 1)',
-                        borderWidth: 1
-                    }]
-                });
+                    datasets: [
+                        {
+                            label: 'Total',
+                            data: dailyTotals,
+                            backgroundColor: 'rgba(14, 165, 233, 0.4)',
+                            borderColor: 'rgba(14, 165, 233, 1)',
+                            borderWidth: 1,
+                            type: 'bar',
+                            order: 2
+                        },
+                        ...mealDatasets
+                    ]
+                }, { legend: { display: mealDatasets.length > 0 } });
             },
 
             async refreshMonth() {
@@ -1646,7 +1689,7 @@
                 this.refreshHistory();
             },
 
-            createChart(elementId, type, data) {
+            createChart(elementId, type, data, pluginOverrides) {
                 if (this.charts[elementId]) {
                     this.charts[elementId].destroy();
                 }
@@ -1659,9 +1702,7 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: {
-                                display: false
-                            }
+                            legend: Object.assign({ display: false }, pluginOverrides?.legend)
                         },
                         scales: {
                             y: {

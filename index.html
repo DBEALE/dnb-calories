@@ -89,6 +89,23 @@
             color: var(--text-secondary);
         }
 
+        .date-filter {
+            margin-bottom: 12px;
+        }
+
+        .date-filter-label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .date-filter-help {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            margin-bottom: 8px;
+        }
+
         /* Navigation */
         .nav-tabs {
             position: fixed;
@@ -575,7 +592,9 @@
         <div class="content">
             <!-- Today Screen -->
             <div class="screen active" id="screen-today">
-                <input type="date" id="today-date-filter" onchange="app.setTodayDate(this.value)" style="margin-bottom: 12px;">
+                <label for="today-date-filter" class="date-filter-label">View date</label>
+                <input type="date" id="today-date-filter" class="date-filter" aria-label="Select date to view" aria-describedby="today-date-help" onchange="app.setViewDate(this.value)">
+                <div id="today-date-help" class="date-filter-help">Tip: use arrow keys to navigate dates in the picker.</div>
 
                 <div class="kpi-grid">
                     <div class="kpi-card">
@@ -1132,7 +1151,30 @@
             },
 
             getCurrentDateString() {
-                return new Date().toISOString().split('T')[0];
+                const d = new Date();
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+
+            formatDisplayDate(dateString) {
+                if (!this.isValidDateString(dateString)) {
+                    dateString = this.getCurrentDateString();
+                }
+                const [year, month, day] = dateString.split('-').map(Number);
+                return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            },
+
+            isValidDateString(dateString) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false;
+                const [year, month, day] = dateString.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
             },
 
             updateDate() {
@@ -1141,12 +1183,9 @@
                     this.selectedTodayDate = this.getCurrentDateString();
                 }
 
-                document.getElementById('header-date').textContent = new Date(`${this.selectedTodayDate}T12:00:00`).toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
+                document.getElementById('header-date').textContent = this.formatDisplayDate(this.selectedTodayDate);
                 document.getElementById('today-date-filter').value = this.selectedTodayDate;
+                document.getElementById('today-date-filter').max = this.getCurrentDateString();
                 
                 // Set default dates in forms
                 document.getElementById('upload-date').valueAsDate = today;
@@ -1158,8 +1197,8 @@
                 document.getElementById('weight-entry-time').value = now;
             },
 
-            setTodayDate(date) {
-                if (!date) return;
+            setViewDate(date) {
+                if (!this.isValidDateString(date)) return;
                 this.selectedTodayDate = date;
                 this.updateDate();
                 this.refreshToday();
@@ -1434,7 +1473,7 @@
                     const latest = allWeights[allWeights.length - 1];
                     document.getElementById('today-weight').textContent = latest.weight_kg + ' kg';
                 } else {
-                    document.getElementById('today-weight').textContent = 'No entry yet';
+                    document.getElementById('today-weight').textContent = 'No weight logged yet';
                 }
             },
 

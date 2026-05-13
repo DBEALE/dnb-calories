@@ -11,6 +11,7 @@ interface ExtractRequest {
 }
 
 interface ExtractResponse {
+  image_type: 'label' | 'food_photo';
   food_name: string | null;
   brand: string | null;
   serving_size_text: string | null;
@@ -89,20 +90,26 @@ async function callOpenRouter(
   imageBase64: string,
   apiKey: string
 ): Promise<ExtractResponse> {
-  const prompt = `You are a professional nutrition label OCR system with high accuracy.
+  const prompt = `You are a nutrition analysis system. First determine what type of image this is, then respond accordingly.
 
-CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:
-1. Extract nutrition data from the food label image
-2. Return PER SERVING values ONLY (calculate if shown per 100ml/g)
-3. Extract all these fields: food_name, brand, serving_size_text, servings, per_pack, calories_kcal, protein_g, carbs_g, fat_g, sugar_g, salt_g, fibre_g
-4. All numbers must be PLAIN NUMBERS with NO units (e.g., "103" not "103kcal", "23" not "23g")
-5. Return confidence as number 0-1 (0.9 = 90% confident)
-6. Return ONLY valid JSON - NO other text before or after
+STEP 1 - IDENTIFY IMAGE TYPE:
+- "label": a nutrition facts/information label, packaging, or nutritional table
+- "food_photo": a photo of actual food, a meal, a dish, or ingredients
 
-IMPORTANT: Do not include any explanation, text, or commentary. Only return the JSON object.
+STEP 2 - RESPOND BASED ON TYPE:
+
+IF "label": Extract exact values from the label. Return PER SERVING values (calculate if shown per 100ml/g).
+
+IF "food_photo": Estimate nutrition for the visible food based on typical values for that food/portion size. Use your knowledge of common foods. Set confidence lower (0.4-0.65) to reflect estimation uncertainty. Add a warning that values are estimated.
+
+RULES FOR BOTH:
+- All numbers must be PLAIN NUMBERS with NO units (e.g., "103" not "103kcal", "23" not "23g")
+- Return ONLY valid JSON - NO other text before or after
+- Do not include any explanation, text, or commentary
 
 Return this JSON and NOTHING ELSE:
 {
+  "image_type": "label" or "food_photo",
   "food_name": "string or null",
   "brand": "string or null",
   "serving_size_text": "string or null",
@@ -211,6 +218,7 @@ Return this JSON and NOTHING ELSE:
     console.error('Failed to parse response:', content);
     // Return empty result instead of throwing
     extractedData = {
+      image_type: 'label',
       food_name: null,
       brand: null,
       serving_size_text: null,
@@ -233,6 +241,7 @@ Return this JSON and NOTHING ELSE:
 
 function normalizeExtraction(data: any): ExtractResponse {
   return {
+    image_type: data.image_type === 'food_photo' ? 'food_photo' : 'label',
     food_name: sanitizeString(data.food_name),
     brand: sanitizeString(data.brand),
     serving_size_text: sanitizeString(data.serving_size_text),

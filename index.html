@@ -1772,7 +1772,7 @@
                 reader.onload = async (e) => {
                     const base64 = e.target.result.split(',')[1];
                     const resultDiv = document.getElementById('extraction-result');
-                    resultDiv.innerHTML = '<div class="loading" style="margin: 16px auto;"></div> Extracting...';
+                    resultDiv.innerHTML = '<div class="loading" style="margin: 16px auto;"></div> Analysing image...';
 
                     try {
                         // Call Cloudflare Worker endpoint
@@ -1842,6 +1842,7 @@
                         <label>Fat (g)</label>
                         <input type="number" id="review-fat" value="${data.fat_g || ''}" step="0.1">
                     </div>
+                    ${data.image_type === 'food_photo' ? `<p style="font-size: 11px; color: var(--accent-info); margin-bottom: 8px; padding: 6px 10px; background: rgba(14,165,233,0.08); border-radius: 6px;">📷 Values estimated from food photo — please review carefully</p>` : ''}
                     ${data.confidence ? `<p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;">Confidence: ${Math.round(data.confidence * 100)}%</p>` : ''}
                     ${data.warnings && data.warnings.length ? `<p style="font-size: 11px; color: var(--accent-warning); margin-bottom: 12px;">⚠️ ${data.warnings.join(', ')}</p>` : ''}
                 `;

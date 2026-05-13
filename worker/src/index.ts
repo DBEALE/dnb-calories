@@ -89,20 +89,25 @@ async function callOpenRouter(
   imageBase64: string,
   apiKey: string
 ): Promise<ExtractResponse> {
-const prompt = `You are a nutrition label OCR system. Extract nutrition data ONLY.
+  const prompt = `You are a professional nutrition label OCR system with high accuracy.
 
-CRITICAL: Return ONLY a valid JSON object. No text before or after. No markdown.
+CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:
+1. Extract nutrition data from the food label image
+2. Return PER SERVING values ONLY (calculate if shown per 100ml/g)
+3. Extract all these fields: food_name, brand, serving_size_text, servings, per_pack, calories_kcal, protein_g, carbs_g, fat_g, sugar_g, salt_g, fibre_g
+4. All numbers must be PLAIN NUMBERS with NO units (e.g., "103" not "103kcal", "23" not "23g")
+5. Return confidence as number 0-1 (0.9 = 90% confident)
+6. Return ONLY valid JSON - NO other text before or after
 
-If you cannot extract nutrition data, return:
-{"food_name":null,"brand":null,"serving_size_text":null,"servings":1,"per_pack":false,"calories_kcal":null,"protein_g":null,"carbs_g":null,"fat_g":null,"sugar_g":null,"salt_g":null,"fibre_g":null,"confidence":0,"warnings":["cannot extract"]}
+IMPORTANT: Do not include any explanation, text, or commentary. Only return the JSON object.
 
-Extract and return ONLY this JSON:
+Return this JSON and NOTHING ELSE:
 {
-  "food_name": string or null,
-  "brand": string or null,
-  "serving_size_text": string or null,
-  "servings": number,
-  "per_pack": boolean,
+  "food_name": "string or null",
+  "brand": "string or null",
+  "serving_size_text": "string or null",
+  "servings": 1,
+  "per_pack": false,
   "calories_kcal": number or null,
   "protein_g": number or null,
   "carbs_g": number or null,
@@ -110,8 +115,8 @@ Extract and return ONLY this JSON:
   "sugar_g": number or null,
   "salt_g": number or null,
   "fibre_g": number or null,
-  "confidence": number 0-1,
-  "warnings": array of strings
+  "confidence": 0.9,
+  "warnings": []
 }`;
 
   const response = await fetch('https://openrouter.ai/api/v1/messages', {
@@ -123,7 +128,7 @@ Extract and return ONLY this JSON:
       'X-Title': 'DNB Calories',
     },
     body: JSON.stringify({
-      model: 'meta-llama/llama-3.2-11b-vision-instruct',
+      model: 'openai/gpt-4o-mini',
       max_tokens: 500,
       messages: [
         {
@@ -153,10 +158,10 @@ Extract and return ONLY this JSON:
   }
 
   const data = await response.json();
-  
+
   // Handle Llama response format (different from OpenAI)
   let content = null;
-  
+
   if (data.content && Array.isArray(data.content)) {
     // Llama format: content is an array
     const textContent = data.content.find((item: any) => item.type === 'text');
@@ -172,15 +177,55 @@ Extract and return ONLY this JSON:
 
   let extractedData: ExtractResponse;
   try {
-    // Remove markdown code blocks if present
-    const cleanedContent = content
+    let cleanedContent = content;
+
+    // Try to extract JSON from markdown code block first
+    const jsonMatch = cleanedContent.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (jsonMatch) {
+      cleanedContent = jsonMatch[1];
+    }
+
+    // Try to find JSON object in the text (handles extra text before/after)
+    const jsonObjectMatch = cleanedContent.match(/\{[\s\S]*\}/);
+    if (jsonObjectMatch) {
+      cleanedContent = jsonObjectMatch[0];
+    }
+
+    // Remove any remaining markdown
+    cleanedContent = cleanedContent
       .replace(/```json\n?/g, '')
       .replace(/\n?```/g, '')
       .trim();
+
+    // Clean up common issues before parsing
+    cleanedContent = cleanedContent
+      .replace(/:\s*<([0-9.]+)/g, ': $1')  // Convert <0.5 to 0.5
+      .replace(/:\s*>([0-9.]+)/g, ': $1')  // Convert >1 to 1
+      .replace(/:\s*≤([0-9.]+)/g, ': $1')  // Convert ≤0.5 to 0.5
+      .replace(/:\s*≥([0-9.]+)/g, ': $1')  // Convert ≥0.5 to 0.5
+      .replace(/:\s*"([^"]*)<([0-9.]+)([^"]*)"/g, ': "$1$2$3"');  // Clean quoted values
+
+    // Parse the JSON
     extractedData = JSON.parse(cleanedContent);
   } catch (parseError) {
-    console.error('Failed to parse:', content);
-    throw new Error('Invalid JSON in API response');
+    console.error('Failed to parse response:', content);
+    // Return empty result instead of throwing
+    extractedData = {
+      food_name: null,
+      brand: null,
+      serving_size_text: null,
+      servings: 1,
+      per_pack: false,
+      calories_kcal: null,
+      protein_g: null,
+      carbs_g: null,
+      fat_g: null,
+      sugar_g: null,
+      salt_g: null,
+      fibre_g: null,
+      confidence: 0,
+      warnings: ['Could not parse extraction'],
+    };
   }
 
   return normalizeExtraction(extractedData);
@@ -215,10 +260,22 @@ function sanitizeString(value: any): string | null {
 }
 
 function sanitizeNumber(value: any, defaultValue: number | null = null): number | null {
-  const num = parseFloat(value);
-  if (!isNaN(num) && num >= 0 && num < 100000) {
-    return Math.round(num * 10) / 10;
+  if (value === null || value === undefined || value === '') {
+    return defaultValue;
   }
+
+  // Convert to string and extract first number
+  let str = String(value).trim();
+
+  // Handle fractions like "173.4/100ml" - take first number
+  const match = str.match(/^([0-9.]+)/);
+  if (match) {
+    const num = parseFloat(match[1]);
+    if (!isNaN(num) && num >= 0 && num < 100000) {
+      return Math.round(num * 10) / 10;
+    }
+  }
+
   return defaultValue;
 }
 

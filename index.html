@@ -1402,9 +1402,19 @@
     </div>
 
     <script>
-        const APP_BUILD = 20;
+        const APP_BUILD = 21;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'Macro split ring on Log screen',
+                items: [
+                    'Second ring added alongside the calorie ring showing actual protein / carbs / fat split',
+                    'Compared against recommended 15% protein, 55% carbs, 30% fat guidelines',
+                    'Each macro row shows actual % vs target %, colour coded green / amber / red by how close you are',
+                    'Ring shows — and a prompt to use Scan Food Label when no macro data is available',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'History tab empty states',
@@ -2039,30 +2049,118 @@
                 const isOver = pct > 1;
                 const remaining = target - consumed;
 
-                // Ring colour based on progress
+                // ── Calorie ring ──────────────────────────────────────
                 const ringColor = pct > 1 ? '#ef4444' : pct > 0.9 ? '#f97316' : pct > 0.75 ? '#f59e0b' : '#10b981';
-
-                // Main ring
-                const r1 = 76, sw1 = 15, size = 200;
+                const r1 = 70, sw1 = 13;
                 const c1 = +(2 * Math.PI * r1).toFixed(2);
                 const p1 = +(Math.min(pct, 1) * c1).toFixed(2);
-
-                // Overflow spiral (inner ring, slightly smaller radius = coil-inward effect)
-                const r2 = 58, sw2 = 11;
+                const r2 = 54, sw2 = 10;
                 const c2 = +(2 * Math.PI * r2).toFixed(2);
                 const overflowPct = isOver ? pct - 1 : 0;
                 const p2 = +(Math.min(overflowPct, 1) * c2).toFixed(2);
 
                 const remainText = isOver
-                    ? `<span style="color:#ef4444;font-weight:700;">${Math.abs(Math.round(remaining)).toLocaleString()} kcal over</span>`
+                    ? `<span style="color:#ef4444;font-weight:700;font-size:11px;">${Math.abs(Math.round(remaining)).toLocaleString()} over</span>`
                     : remaining > 0
-                        ? `<span style="color:#10b981;font-weight:700;">${Math.round(remaining).toLocaleString()} kcal left</span>`
-                        : `<span style="color:#f59e0b;font-weight:700;">Target reached</span>`;
+                        ? `<span style="color:#10b981;font-weight:700;font-size:11px;">${Math.round(remaining).toLocaleString()} left</span>`
+                        : `<span style="color:#f59e0b;font-weight:700;font-size:11px;">On target</span>`;
 
-                const deficitSign = deficit > 0 ? '▾' : '▴';
-                const deficitColor = deficit > 0 ? '#10b981' : '#f59e0b';
+                const calorieSVG = `
+                    <div style="position:relative;width:100%;padding-top:100%;">
+                        <svg viewBox="0 0 180 180" style="position:absolute;inset:0;width:100%;height:100%;">
+                            <circle cx="90" cy="90" r="${r1}" fill="none" stroke="var(--bg-secondary)" stroke-width="${sw1}"/>
+                            <circle cx="90" cy="90" r="${r1}" fill="none" stroke="${ringColor}" stroke-width="${sw1}"
+                                stroke-dasharray="${p1} ${c1}" stroke-linecap="round" transform="rotate(-90 90 90)"/>
+                            ${isOver ? `
+                            <circle cx="90" cy="90" r="${r2}" fill="none" stroke="rgba(239,68,68,0.18)" stroke-width="${sw2}"/>
+                            <circle cx="90" cy="90" r="${r2}" fill="none" stroke="#ef4444" stroke-width="${sw2}"
+                                stroke-dasharray="${p2} ${c2}" stroke-linecap="round" transform="rotate(-90 90 90)"/>` : ''}
+                        </svg>
+                        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:8px;">
+                            <div style="font-size:26px;font-weight:800;color:var(--text-primary);letter-spacing:-1px;line-height:1;">${consumed.toLocaleString()}</div>
+                            <div style="font-size:9px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.4px;margin-top:2px;">OF ${target.toLocaleString()} KCAL</div>
+                            <div style="margin-top:5px;">${remainText}</div>
+                        </div>
+                    </div>`;
 
-                // Mini ring helper — sized to fit 5 across on mobile
+                // ── Macro split ring ──────────────────────────────────
+                const TARGETS = { p: 15, c: 55, f: 30 }; // recommended %
+                const pKcal = protein * 4, cKcal = carbs * 4, fKcal = fat * 9;
+                const totalMacroKcal = pKcal + cKcal + fKcal;
+                const hasMacros = totalMacroKcal > 0;
+
+                const actualP = hasMacros ? Math.round(pKcal / totalMacroKcal * 100) : 0;
+                const actualC = hasMacros ? Math.round(cKcal / totalMacroKcal * 100) : 0;
+                const actualF = hasMacros ? Math.round(fKcal / totalMacroKcal * 100) : 0;
+
+                // SVG arc path helper
+                const toRad = d => d * Math.PI / 180;
+                const arcPath = (cx, cy, r, startDeg, endDeg) => {
+                    const s = { x: cx + r * Math.cos(toRad(startDeg)), y: cy + r * Math.sin(toRad(startDeg)) };
+                    const e = { x: cx + r * Math.cos(toRad(endDeg)),   y: cy + r * Math.sin(toRad(endDeg)) };
+                    const large = (endDeg - startDeg) > 180 ? 1 : 0;
+                    return `M ${s.x.toFixed(1)} ${s.y.toFixed(1)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(1)} ${e.y.toFixed(1)}`;
+                };
+
+                let macroSVG;
+                if (!hasMacros) {
+                    macroSVG = `<svg viewBox="0 0 130 130" style="position:absolute;inset:0;width:100%;height:100%;">
+                        <circle cx="65" cy="65" r="48" fill="none" stroke="var(--bg-secondary)" stroke-width="12"/>
+                    </svg>`;
+                } else {
+                    const segments = [
+                        { pct: actualP, color: '#f59e0b' }, // protein
+                        { pct: actualC, color: '#0ea5e9' }, // carbs
+                        { pct: actualF, color: '#8b5cf6' }, // fat
+                    ];
+                    const gap = 3, cx = 65, cy = 65, r = 48, sw = 12;
+                    let angle = -90;
+                    const arcs = segments.map(s => {
+                        const span = s.pct / 100 * 360;
+                        const path = span > gap * 2
+                            ? arcPath(cx, cy, r, angle + gap / 2, angle + span - gap / 2)
+                            : span > 1
+                                ? arcPath(cx, cy, r, angle, angle + span)
+                                : '';
+                        angle += span;
+                        return path ? `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="${sw}" stroke-linecap="round"/>` : '';
+                    }).join('');
+                    macroSVG = `<svg viewBox="0 0 130 130" style="position:absolute;inset:0;width:100%;height:100%;">
+                        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg-secondary)" stroke-width="${sw}"/>
+                        ${arcs}
+                    </svg>`;
+                }
+
+                const macroCompRow = (label, actual, target, color) => {
+                    const diff = actual - target;
+                    const fc = Math.abs(diff) <= 7 ? '#10b981' : Math.abs(diff) <= 15 ? '#f59e0b' : '#ef4444';
+                    return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;">
+                        <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+                        <span style="font-size:11px;font-weight:600;color:var(--text-secondary);flex:1;">${label}</span>
+                        <span style="font-size:12px;font-weight:800;color:${fc};">${hasMacros ? actual + '%' : '—'}</span>
+                        <span style="font-size:10px;color:var(--text-tertiary);">/ ${target}%</span>
+                    </div>`;
+                };
+
+                const macroRingEl = `
+                    <div style="display:flex;flex-direction:column;align-items:center;height:100%;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:4px;">MACROS</div>
+                        <div style="position:relative;width:100%;padding-top:100%;flex-shrink:0;">${macroSVG}
+                            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
+                                ${hasMacros
+                                    ? `<div style="font-size:10px;font-weight:700;color:var(--text-primary);line-height:1.3;text-align:center;">${actualC}%<br><span style="color:var(--text-tertiary);font-size:9px;">carbs</span></div>`
+                                    : `<span style="font-size:14px;color:var(--text-tertiary);">—</span>`}
+                            </div>
+                        </div>
+                        <div style="width:100%;margin-top:8px;">
+                            ${macroCompRow('Protein', actualP, TARGETS.p, '#f59e0b')}
+                            ${macroCompRow('Carbs',   actualC, TARGETS.c, '#0ea5e9')}
+                            ${macroCompRow('Fat',     actualF, TARGETS.f, '#8b5cf6')}
+                        </div>
+                        ${!hasMacros ? `<div style="font-size:10px;color:var(--text-tertiary);text-align:center;margin-top:2px;">Log via 📸 to see split</div>` : ''}
+                    </div>`;
+
+                // ── Mini RDA rings ─────────────────────────────────────
                 const miniRing = (label, g, rdaG, color, decimals = 0) => {
                     const mr = 22, msw = 6, sz = 54;
                     const mc = +(2 * Math.PI * mr).toFixed(2);
@@ -2089,38 +2187,27 @@
                         </div>`;
                 };
 
-                const macroRow = rda ? `
-                    <div style="display:flex;gap:4px;justify-content:space-around;padding-top:12px;border-top:1px solid var(--border-color);margin-top:12px;">
-                        ${miniRing('Protein', protein,  rda.protein, '#f59e0b')}
-                        ${miniRing('Carbs',   carbs,    rda.carbs,   '#0ea5e9')}
-                        ${miniRing('Fat',     fat,      rda.fat,     '#8b5cf6')}
-                        ${miniRing('Fibre',   fiber,    rda.fiber,   '#10b981')}
-                        ${miniRing('Salt',    salt,     rda.salt,    '#06b6d4', 1)}
+                const deficitSign = deficit > 0 ? '▾' : '▴';
+                const deficitColor = deficit > 0 ? '#10b981' : '#f59e0b';
+
+                const macroRdaRow = rda ? `
+                    <div style="display:flex;gap:4px;justify-content:space-around;padding-top:12px;border-top:1px solid var(--border-color);margin-top:4px;">
+                        ${miniRing('Protein', protein, rda.protein, '#f59e0b')}
+                        ${miniRing('Carbs',   carbs,   rda.carbs,   '#0ea5e9')}
+                        ${miniRing('Fat',     fat,     rda.fat,     '#8b5cf6')}
+                        ${miniRing('Fibre',   fiber,   rda.fiber,   '#10b981')}
+                        ${miniRing('Salt',    salt,    rda.salt,    '#06b6d4', 1)}
                     </div>` : '';
 
                 document.getElementById('calorie-ring-container').innerHTML = `
-                    <div style="position:relative;">
-                        <svg viewBox="0 0 ${size} ${size}" style="width:100%;max-width:220px;display:block;margin:0 auto;">
-                            <circle cx="100" cy="100" r="${r1}" fill="none" stroke="var(--bg-secondary)" stroke-width="${sw1}"/>
-                            <circle cx="100" cy="100" r="${r1}" fill="none" stroke="${ringColor}" stroke-width="${sw1}"
-                                stroke-dasharray="${p1} ${c1}" stroke-linecap="round"
-                                transform="rotate(-90 100 100)"/>
-                            ${isOver ? `
-                            <circle cx="100" cy="100" r="${r2}" fill="none" stroke="rgba(239,68,68,0.18)" stroke-width="${sw2}"/>
-                            <circle cx="100" cy="100" r="${r2}" fill="none" stroke="#ef4444" stroke-width="${sw2}"
-                                stroke-dasharray="${p2} ${c2}" stroke-linecap="round"
-                                transform="rotate(-90 100 100)"/>` : ''}
-                        </svg>
-                        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;">
-                            <div style="font-size:34px;font-weight:800;color:var(--text-primary);letter-spacing:-1.5px;line-height:1;">${consumed.toLocaleString()}</div>
-                            <div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-top:2px;">OF ${target.toLocaleString()} KCAL</div>
-                            <div style="font-size:13px;margin-top:6px;">${remainText}</div>
-                        </div>
+                    <div style="display:flex;gap:14px;align-items:flex-start;">
+                        <div style="flex:5;min-width:0;">${calorieSVG}</div>
+                        <div style="flex:4;min-width:0;">${macroRingEl}</div>
                     </div>
-                    <div style="text-align:center;font-size:12px;font-weight:600;color:${deficitColor};margin:6px 0 4px;">
+                    <div style="text-align:center;font-size:12px;font-weight:600;color:${deficitColor};margin:8px 0 2px;">
                         ${deficitSign} ${Math.abs(Math.round(deficit)).toLocaleString()} kcal vs maintenance
                     </div>
-                    ${macroRow}`;
+                    ${macroRdaRow}`;
             },
 
             groupMealsByType(entries) {

@@ -1505,16 +1505,17 @@
     </div>
 
     <script>
-        const APP_BUILD = 30;
+        const APP_BUILD = 31;
 
         const CHANGELOG = [
             {
                 date: '2026-05-14',
-                title: 'Macro deviation thumbnails',
+                title: 'Macro deviation charts everywhere',
                 items: [
-                    'Each meal group and individual meal now shows a tiny 3-bar deviation chart to the left of the name',
-                    'The centre of each bar is the target %; bars extend right (over) or left (under)',
-                    'Green within 7%, amber within 15%, red beyond — at a glance without expanding anything',
+                    'Macro Balance panel replaced pie chart with full-width horizontal deviation bars (Protein / Carbs / Fat)',
+                    'Each bar centred on the target %; actual % and "tgt X%" shown on the right',
+                    'Meal group and individual meal items show matching vertical 3-column thumbnails to the left of the name',
+                    'Green within 7%, amber within 15%, red beyond — consistent across all views',
                 ]
             },
             {
@@ -2432,6 +2433,19 @@
                     const groupCarbs   = group.entries.reduce((sum, e) => sum + (e.carbs_g    || 0), 0);
                     const groupFat     = group.entries.reduce((sum, e) => sum + (e.fat_g      || 0), 0);
                     const accent = mealAccents[group.type] || { color: 'var(--text-secondary)', bg: 'var(--bg-secondary)' };
+                    const gmK = groupProtein * 4 + groupCarbs * 4 + groupFat * 9;
+                    const gP = gmK > 0 ? Math.round(groupProtein * 4 / gmK * 100) : null;
+                    const gC = gmK > 0 ? Math.round(groupCarbs   * 4 / gmK * 100) : null;
+                    const gF = gmK > 0 ? Math.round(groupFat      * 9 / gmK * 100) : null;
+                    const tP = this.profile?.macro_protein_pct ?? 15;
+                    const tC = this.profile?.macro_carbs_pct   ?? 55;
+                    const tF = this.profile?.macro_fat_pct     ?? 30;
+                    const mCol = (a, t) => Math.abs(a-t) <= 7 ? '#10b981' : Math.abs(a-t) <= 15 ? '#f59e0b' : '#ef4444';
+                    const groupMacroLine = gP !== null ? `<div style="display:flex;gap:8px;margin-top:3px;">
+                        <span style="font-size:10px;font-weight:600;color:${mCol(gP,tP)};">P ${gP}%<span style="font-weight:400;color:#6b7280;"> /${tP}%</span></span>
+                        <span style="font-size:10px;font-weight:600;color:${mCol(gC,tC)};">C ${gC}%<span style="font-weight:400;color:#6b7280;"> /${tC}%</span></span>
+                        <span style="font-size:10px;font-weight:600;color:${mCol(gF,tF)};">F ${gF}%<span style="font-weight:400;color:#6b7280;"> /${tF}%</span></span>
+                    </div>` : '';
                     const items = group.entries.map(e => {
                         const macros = [
                             e.protein_g ? `P ${Math.round(e.protein_g)}g` : '',
@@ -2462,7 +2476,10 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;">
                             <div style="display: flex; align-items: center; gap: 7px;">
                                 ${this.macroDiscrepancySVG(groupProtein, groupCarbs, groupFat)}
-                                <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: ${accent.color};">${group.type}</span>
+                                <div>
+                                    <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: ${accent.color};">${group.type}</span>
+                                    ${groupMacroLine}
+                                </div>
                             </div>
                             <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${groupTotal} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 10px;">kcal</span></span>
                         </div>
@@ -2614,35 +2631,40 @@
                 const actualC = hasMacros ? Math.round(cKcal / totalMacroKcal * 100) : 0;
                 const actualF = hasMacros ? Math.round(fKcal / totalMacroKcal * 100) : 0;
 
-                const macroLegendRow = (label, actual, targetPct, color) => {
-                    const diff = actual - targetPct;
-                    const fc = Math.abs(diff) <= 7 ? '#10b981' : Math.abs(diff) <= 15 ? '#f59e0b' : '#ef4444';
-                    return `
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                            <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>
-                            <span style="font-size:13px;font-weight:600;color:var(--text-primary);flex:1;">${label}</span>
-                            <span style="font-size:14px;font-weight:800;color:${fc};">${actual}%</span>
-                            <span style="font-size:11px;color:var(--text-tertiary);min-width:52px;text-align:right;">target ${targetPct}%</span>
-                        </div>`;
+                const macroPanelSVG = (aP, aC, aF, tP, tC, tF) => {
+                    const col = (a, t) => Math.abs(a-t) <= 7 ? '#10b981' : Math.abs(a-t) <= 15 ? '#f59e0b' : '#ef4444';
+                    const W = 260, BH = 14, GAP = 7, PL = 38, PR = 46, TW = W - PL - PR;
+                    const CX = +(PL + TW / 2).toFixed(1);
+                    const MAX_DEV = 50, pxPct = TW / 2 / MAX_DEV;
+                    const H = 3 * BH + 2 * GAP;
+                    const row = (y, lbl, actual, target) => {
+                        const dev = actual - target;
+                        const dc = Math.max(-MAX_DEV, Math.min(MAX_DEV, dev));
+                        const c = col(actual, target);
+                        const bx = +(dc < 0 ? CX + dc * pxPct : +CX).toFixed(1);
+                        const bw = +(Math.abs(dc) * pxPct).toFixed(1);
+                        const devStr = dev >= 0 ? `+${dev}%` : `${dev}%`;
+                        return `
+                            <text x="0" y="${y+BH-2}" font-size="10" font-weight="700" fill="#6b7280" font-family="system-ui,sans-serif">${lbl}</text>
+                            <rect x="${PL}" y="${y}" width="${TW}" height="${BH}" rx="${BH/2}" fill="rgba(128,128,128,0.12)"/>
+                            ${bw > 0 ? `<rect x="${bx}" y="${y}" width="${bw}" height="${BH}" rx="${BH/2}" fill="${c}" opacity="0.85"/>` : ''}
+                            <line x1="${CX}" y1="${y-2}" x2="${CX}" y2="${y+BH+2}" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" stroke-linecap="round"/>
+                            <text x="${W-PR+5}" y="${y+BH-3}" font-size="12" font-weight="800" fill="${c}" font-family="system-ui,sans-serif">${actual}%</text>
+                            <text x="${W-PR+5}" y="${y+BH+8}" font-size="8" fill="#6b7280" font-family="system-ui,sans-serif">tgt ${target}%</text>`;
+                    };
+                    return `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible;">
+                        ${row(0, 'Protein', aP, tP)}
+                        ${row(BH+GAP, 'Carbs', aC, tC)}
+                        ${row(2*(BH+GAP), 'Fat', aF, tF)}
+                    </svg>`;
                 };
 
                 const macroSection = `
                     <div style="border-top:1px solid var(--border-color);margin:12px 0 10px;padding-top:12px;">
                         <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.7px;text-align:center;margin-bottom:12px;">MACRO BALANCE</div>
-                        ${hasMacros ? `
-                        <div style="display:flex;align-items:center;gap:16px;">
-                            <div style="flex-shrink:0;width:130px;height:130px;">
-                                <canvas id="log-macro-pie" style="width:130px;height:130px;"></canvas>
-                            </div>
-                            <div style="flex:1;">
-                                ${macroLegendRow('Protein', actualP, TARGETS.p, '#f59e0b')}
-                                ${macroLegendRow('Carbs',   actualC, TARGETS.c, '#0ea5e9')}
-                                ${macroLegendRow('Fat',     actualF, TARGETS.f, '#8b5cf6')}
-                            </div>
-                        </div>` : `
-                        <p style="text-align:center;font-size:12px;color:var(--text-tertiary);padding:8px 0;">
-                            Scan a food label 📸 to see your macro split
-                        </p>`}
+                        ${hasMacros
+                            ? macroPanelSVG(actualP, actualC, actualF, TARGETS.p, TARGETS.c, TARGETS.f)
+                            : `<p style="text-align:center;font-size:12px;color:var(--text-tertiary);padding:8px 0;">Scan a food label 📸 to see your macro split</p>`}
                     </div>`;
 
                 // ── 3. RDA mini rings — 5 equal ────────────────────────
@@ -2695,29 +2717,6 @@
                     if (overflow) overflow.setAttribute('stroke-dasharray', `${OP} ${OC}`);
                 }));
 
-                if (hasMacros) {
-                    const bgGap = document.body.classList.contains('dark') ? '#0f172a' : '#f0f2f7';
-                    const segBorder = (actual, target) => {
-                        const excess = actual - target;
-                        if (excess <= 5)  return { width: 2, color: bgGap };
-                        if (excess <= 15) return { width: 5, color: '#f59e0b' };
-                        return              { width: 7, color: '#ef4444' };
-                    };
-                    const pb = segBorder(actualP, TARGETS.p);
-                    const cb = segBorder(actualC, TARGETS.c);
-                    const fb = segBorder(actualF, TARGETS.f);
-
-                    this.createChart('log-macro-pie', 'doughnut', {
-                        labels: ['Protein', 'Carbs', 'Fat'],
-                        datasets: [{
-                            data: [Math.round(pKcal), Math.round(cKcal), Math.round(fKcal)],
-                            backgroundColor: ['#f59e0b', '#0ea5e9', '#8b5cf6'],
-                            borderWidth: [pb.width, cb.width, fb.width],
-                            borderColor:  [pb.color,  cb.color,  fb.color],
-                            hoverOffset: 6,
-                        }]
-                    });
-                }
             },
 
             macroThumbSVG(protein, carbs, fat, H = 32) {
@@ -2731,7 +2730,7 @@
                 const tC = this.profile?.macro_carbs_pct   ?? 55;
                 const tF = this.profile?.macro_fat_pct     ?? 30;
                 const col = (a, t) => Math.abs(a-t) <= 7 ? '#10b981' : Math.abs(a-t) <= 15 ? '#f59e0b' : '#ef4444';
-                const BW = 6, GAP = 3, W = 3 * BW + 2 * GAP;
+                const BW = 6, GAP = 1, W = 3 * BW + 2 * GAP;
                 const CY = H / 2, MAX_DEV = 50, pxPct = CY / MAX_DEV;
                 const bar = (x, actual, target) => {
                     const dc = Math.max(-MAX_DEV, Math.min(MAX_DEV, actual - target));

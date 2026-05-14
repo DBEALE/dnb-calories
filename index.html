@@ -963,6 +963,36 @@
                 </div>
 
                 <div class="card">
+                    <div class="card-title">Nutrition Targets (RDA)</div>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">Your recommended daily amounts. Defaults are calculated from your profile — edit to override.</p>
+                    <div class="upload-form-row">
+                        <label>Protein</label>
+                        <input type="number" id="settings-rda-protein" min="10" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">g</span>
+                    </div>
+                    <div class="upload-form-row">
+                        <label>Carbs</label>
+                        <input type="number" id="settings-rda-carbs" min="10" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">g</span>
+                    </div>
+                    <div class="upload-form-row">
+                        <label>Fat</label>
+                        <input type="number" id="settings-rda-fat" min="5" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">g</span>
+                    </div>
+                    <div class="upload-form-row">
+                        <label>Fibre</label>
+                        <input type="number" id="settings-rda-fiber" min="5" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">g</span>
+                    </div>
+                    <div class="upload-form-row">
+                        <label>Salt</label>
+                        <input type="number" id="settings-rda-salt" min="0" step="0.1" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">g</span>
+                    </div>
+                </div>
+
+                <div class="card">
                     <div class="card-title">Data</div>
                     <button class="btn btn-secondary" onclick="app.exportData()" style="width: 100%; margin-bottom: 12px;">📥 Export JSON</button>
                     <button class="btn btn-secondary" onclick="app.importData()" style="width: 100%;">📤 Import JSON</button>
@@ -1431,9 +1461,39 @@
     </div>
 
     <script>
-        const APP_BUILD = 23;
+        const APP_BUILD = 24;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'RDA defaults updated to UK RDA/RNI values',
+                items: [
+                    'Protein: 55.5g (men) / 45g (women)',
+                    'Carbs: 333g (men) / 267g (women)',
+                    'Fat: 97g (men) / 78g (women)',
+                    'Fibre: 30g (both). Salt: 6g max (both)',
+                    'Defaults are still overridable per-nutrient in Settings → Nutrition Targets',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'At-a-glance status panel on Log screen',
+                items: [
+                    'Four status rows sit alongside the calorie ring: Calories, Macros, Nutrition, Weight',
+                    '👍 / 👉 / 👎 gives an instant read on each area without needing to scroll',
+                    'Each row has a tinted background and a short status label (e.g. "Trending down", "Off balance")',
+                    'Calories: based on remaining vs target. Macros: how many of P/C/F are within ±10% of target. Nutrition: protein RDA and salt levels. Weight: 7-day trend direction.',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Configurable nutrition RDA targets',
+                items: [
+                    'Settings now has a Nutrition Targets (RDA) card for Protein, Carbs, Fat, Fibre and Salt',
+                    'Fields pre-populate with your calculated defaults (derived from weight, activity level and sex)',
+                    'Edit any value to override — changes immediately update the RDA progress bars and mini-rings on the Log screen',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Macro pie chart severity borders',
@@ -1736,6 +1796,7 @@
             lastMealDate: null,
             historyPeriod: 'week',
             previousScreen: 'today',
+            weightChange7d: null,
 
             async init() {
                 await initDB();
@@ -1945,6 +2006,14 @@
                 document.getElementById('settings-macro-carbs').value   = this.profile.macro_carbs_pct   ?? 55;
                 document.getElementById('settings-macro-fat').value     = this.profile.macro_fat_pct     ?? 30;
                 this.updateMacroSum();
+                const rda = this.calculateRDA();
+                if (rda) {
+                    document.getElementById('settings-rda-protein').value = rda.protein;
+                    document.getElementById('settings-rda-carbs').value   = rda.carbs;
+                    document.getElementById('settings-rda-fat').value     = rda.fat;
+                    document.getElementById('settings-rda-fiber').value   = rda.fiber;
+                    document.getElementById('settings-rda-salt').value    = rda.salt;
+                }
             },
 
             updateProfile() {
@@ -1962,6 +2031,11 @@
                     macro_protein_pct: parseInt(document.getElementById('settings-macro-protein').value) || 15,
                     macro_carbs_pct:   parseInt(document.getElementById('settings-macro-carbs').value)   || 55,
                     macro_fat_pct:     parseInt(document.getElementById('settings-macro-fat').value)     || 30,
+                    rda_protein: parseInt(document.getElementById('settings-rda-protein').value) || null,
+                    rda_carbs:   parseInt(document.getElementById('settings-rda-carbs').value)   || null,
+                    rda_fat:     parseInt(document.getElementById('settings-rda-fat').value)     || null,
+                    rda_fiber:   parseInt(document.getElementById('settings-rda-fiber').value)   || null,
+                    rda_salt:    parseFloat(document.getElementById('settings-rda-salt').value)  || null,
                     updated_at: new Date().toISOString()
                 };
                 this.saveProfile(profile);
@@ -2158,23 +2232,81 @@
                 const deficitColor = deficit > 0 ? '#10b981' : '#f59e0b';
                 const deficitSign = deficit > 0 ? '▾' : '▴';
 
+                // ── Status logic ───────────────────────────────────────
+                // Calories
+                const calSt = remaining >= 0 ? { thumb:'👍', color:'#10b981', label:'On track' }
+                            : remaining >= -200 ? { thumb:'👉', color:'#f59e0b', label:'Slightly over' }
+                            : { thumb:'👎', color:'#ef4444', label:'Over target' };
+
+                // Macros (need pKcal etc — computed below, preview here)
+                const _pKcal = protein * 4, _cKcal = carbs * 4, _fKcal = fat * 9;
+                const _totalM = _pKcal + _cKcal + _fKcal;
+                const _hasMacros = _totalM > 0;
+                const _actP = _hasMacros ? Math.round(_pKcal / _totalM * 100) : null;
+                const _actC = _hasMacros ? Math.round(_cKcal / _totalM * 100) : null;
+                const _actF = _hasMacros ? Math.round(_fKcal / _totalM * 100) : null;
+                const TARGETS = { p: this.profile?.macro_protein_pct ?? 15, c: this.profile?.macro_carbs_pct ?? 55, f: this.profile?.macro_fat_pct ?? 30 };
+                let macroSt;
+                if (!_hasMacros) {
+                    macroSt = { thumb:'👉', color:'#f59e0b', label:'No data yet' };
+                } else {
+                    const ok = [Math.abs(_actP - TARGETS.p) <= 10, Math.abs(_actC - TARGETS.c) <= 10, Math.abs(_actF - TARGETS.f) <= 10].filter(Boolean).length;
+                    macroSt = ok === 3 ? { thumb:'👍', color:'#10b981', label:'Balanced' }
+                            : ok >= 1 ? { thumb:'👉', color:'#f59e0b', label:'Slightly off' }
+                            : { thumb:'👎', color:'#ef4444', label:'Off balance' };
+                }
+
+                // Nutrition (protein RDA & salt)
+                const _protPct = rda?.protein > 0 ? protein / rda.protein * 100 : 0;
+                const _saltPct = rda?.salt > 0 ? salt / rda.salt * 100 : 0;
+                const nutSt = _protPct >= 70 && _saltPct <= 110 ? { thumb:'👍', color:'#10b981', label:'Looking good' }
+                            : _protPct >= 40 && _saltPct <= 130 ? { thumb:'👉', color:'#f59e0b', label:'Could improve' }
+                            : { thumb:'👎', color:'#ef4444', label:'Needs attention' };
+
+                // Weight (7-day trend)
+                const wc = this.weightChange7d;
+                const wgtSt = wc === null     ? { thumb:'👉', color:'#f59e0b', label:'No data yet' }
+                            : wc <= -0.1      ? { thumb:'👍', color:'#10b981', label:'Trending down' }
+                            : wc <=  0.2      ? { thumb:'👉', color:'#f59e0b', label:'Holding steady' }
+                            : { thumb:'👎', color:'#ef4444', label:'Trending up' };
+
+                const statusRow = (icon, label, st) => `
+                    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;background:${st.color}18;">
+                        <span style="font-size:15px;flex-shrink:0;">${icon}</span>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:12px;font-weight:700;color:var(--text-primary);">${label}</div>
+                            <div style="font-size:10px;color:var(--text-secondary);">${st.label}</div>
+                        </div>
+                        <span style="font-size:22px;flex-shrink:0;">${st.thumb}</span>
+                    </div>`;
+
                 const calRing = `
-                    <div style="position:relative;width:210px;height:210px;margin:0 auto 4px;">
-                        <svg viewBox="0 0 210 210" style="width:210px;height:210px;">
-                            <circle cx="105" cy="105" r="${CR}" fill="none" stroke="var(--bg-secondary)" stroke-width="${CSW}"/>
-                            <circle id="cal-ring-arc" cx="105" cy="105" r="${CR}" fill="none" stroke="${ringColor}" stroke-width="${CSW}"
-                                stroke-dasharray="0 ${CC}" stroke-linecap="round" transform="rotate(-90 105 105)"
-                                style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1);"/>
-                            ${isOver ? `
-                            <circle cx="105" cy="105" r="${OR}" fill="none" stroke="rgba(239,68,68,0.15)" stroke-width="${OSW}"/>
-                            <circle id="cal-ring-overflow" cx="105" cy="105" r="${OR}" fill="none" stroke="#ef4444" stroke-width="${OSW}"
-                                stroke-dasharray="0 ${OC}" stroke-linecap="round" transform="rotate(-90 105 105)"
-                                style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1) 0.3s;"/>` : ''}
-                        </svg>
-                        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;">
-                            <div style="font-size:42px;font-weight:800;color:var(--text-primary);letter-spacing:-2px;line-height:1;">${consumed.toLocaleString()}</div>
-                            <div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-top:4px;">OF ${target.toLocaleString()} KCAL</div>
-                            <div style="margin-top:8px;font-size:13px;">${remainText}</div>
+                    <div style="display:flex;gap:12px;align-items:stretch;margin-bottom:4px;">
+                        <!-- Calorie ring -->
+                        <div style="flex-shrink:0;position:relative;width:155px;height:155px;">
+                            <svg viewBox="0 0 210 210" style="width:155px;height:155px;">
+                                <circle cx="105" cy="105" r="${CR}" fill="none" stroke="var(--bg-secondary)" stroke-width="${CSW}"/>
+                                <circle id="cal-ring-arc" cx="105" cy="105" r="${CR}" fill="none" stroke="${ringColor}" stroke-width="${CSW}"
+                                    stroke-dasharray="0 ${CC}" stroke-linecap="round" transform="rotate(-90 105 105)"
+                                    style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1);"/>
+                                ${isOver ? `
+                                <circle cx="105" cy="105" r="${OR}" fill="none" stroke="rgba(239,68,68,0.15)" stroke-width="${OSW}"/>
+                                <circle id="cal-ring-overflow" cx="105" cy="105" r="${OR}" fill="none" stroke="#ef4444" stroke-width="${OSW}"
+                                    stroke-dasharray="0 ${OC}" stroke-linecap="round" transform="rotate(-90 105 105)"
+                                    style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1) 0.3s;"/>` : ''}
+                            </svg>
+                            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;">
+                                <div style="font-size:30px;font-weight:800;color:var(--text-primary);letter-spacing:-1.5px;line-height:1;">${consumed.toLocaleString()}</div>
+                                <div style="font-size:9px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.4px;margin-top:3px;">OF ${target.toLocaleString()} KCAL</div>
+                                <div style="margin-top:5px;font-size:11px;">${remainText}</div>
+                            </div>
+                        </div>
+                        <!-- Status panel -->
+                        <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:5px;min-width:0;">
+                            ${statusRow('📊', 'Calories',  calSt)}
+                            ${statusRow('🥗', 'Macros',    macroSt)}
+                            ${statusRow('💊', 'Nutrition', nutSt)}
+                            ${statusRow('⚖️', 'Weight',   wgtSt)}
                         </div>
                     </div>
                     <div style="text-align:center;font-size:12px;font-weight:600;color:${deficitColor};margin-bottom:4px;">
@@ -2185,11 +2317,6 @@
                 const pKcal = protein * 4, cKcal = carbs * 4, fKcal = fat * 9;
                 const totalMacroKcal = pKcal + cKcal + fKcal;
                 const hasMacros = totalMacroKcal > 0;
-                const TARGETS = {
-                    p: this.profile?.macro_protein_pct ?? 15,
-                    c: this.profile?.macro_carbs_pct   ?? 55,
-                    f: this.profile?.macro_fat_pct     ?? 30,
-                };
                 const actualP = hasMacros ? Math.round(pKcal / totalMacroKcal * 100) : 0;
                 const actualC = hasMacros ? Math.round(cKcal / totalMacroKcal * 100) : 0;
                 const actualF = hasMacros ? Math.round(fKcal / totalMacroKcal * 100) : 0;
@@ -2311,17 +2438,15 @@
             calculateRDA() {
                 const p = this.profile;
                 if (!p) return null;
-                const weight = p.current_weight_kg || 75;
-                const maintenance = p.maintenance_kcal || 2000;
-                const activityProtein = { sedentary: 0.8, light: 1.0, moderate: 1.4, very: 1.8 };
-                const proteinPerKg = activityProtein[p.activity_level] || 1.0;
+                // Defaults from UK RDA/RNI reference values
+                const male = p.sex === 'male';
                 return {
                     calories: p.target_kcal || 2000,
-                    protein: Math.round(proteinPerKg * weight),
-                    carbs: Math.round((maintenance * 0.50) / 4),
-                    fat: Math.round((maintenance * 0.30) / 9),
-                    fiber: p.sex === 'male' ? 38 : 25,
-                    salt: 6,
+                    protein: p.rda_protein ?? (male ? 55.5 : 45),
+                    carbs:   p.rda_carbs   ?? (male ? 333  : 267),
+                    fat:     p.rda_fat     ?? (male ? 97   : 78),
+                    fiber:   p.rda_fiber   ?? 30,
+                    salt:    p.rda_salt    ?? 6,
                 };
             },
 
@@ -2742,6 +2867,7 @@
 
                 if (sevenDayChange.length > 0) {
                     const change = latest.weight_kg - sevenDayChange[0].weight_kg;
+                    this.weightChange7d = change;
                     document.getElementById('weight-7day').textContent = change > 0 ? `+${change.toFixed(1)} kg` : `${change.toFixed(1)} kg`;
                 }
 

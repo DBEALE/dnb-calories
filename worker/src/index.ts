@@ -46,6 +46,7 @@ interface SyncRequest {
 interface Env {
   OPENROUTER_API_KEY: string;
   calorie_tracker_sync: D1Database;
+  ADMIN_TOKEN: string;
 }
 
 interface InsightRequest {
@@ -86,6 +87,10 @@ export default {
       return handleSync(request, env);
     }
 
+    if (pathname.endsWith('/api/admin')) {
+      return handleAdmin(request, env);
+    }
+
     const openRouterKey = env.OPENROUTER_API_KEY;
     if (!openRouterKey) {
       return new Response(
@@ -95,8 +100,11 @@ export default {
     }
 
     if (pathname.endsWith('/api/extract-nutrition')) {
+      let success = true;
+      let token = '';
       try {
-        const body: ExtractRequest = await request.json();
+        const body: ExtractRequest & { token?: string } = await request.json();
+        token = body.token || '';
         if (!body.image_base64 || !body.filename) {
           return new Response(
             JSON.stringify({ error: 'Missing image_base64 or filename' }),
@@ -109,51 +117,113 @@ export default {
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       } catch (error) {
+        success = false;
         console.error('Error:', error);
         return new Response(
           JSON.stringify({ error: 'Extraction failed', details: error instanceof Error ? error.message : 'Unknown error' }),
           { status: 500, headers: corsHeaders }
         );
+      } finally {
+        logUsage(env, token, 'extract-nutrition', 'openai/gpt-4o-mini', success);
       }
     }
 
     if (pathname.endsWith('/api/daily-insight')) {
+      let success = true;
+      let token = '';
       try {
-        const body: InsightRequest = await request.json();
+        const body: InsightRequest & { token?: string } = await request.json();
+        token = body.token || '';
         const result = await callInsight(body, openRouterKey);
         return new Response(JSON.stringify(result), {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       } catch (error) {
+        success = false;
         console.error('Error:', error);
         return new Response(
           JSON.stringify({ error: 'Insight failed', details: error instanceof Error ? error.message : 'Unknown error' }),
           { status: 500, headers: corsHeaders }
         );
+      } finally {
+        logUsage(env, token, 'daily-insight', 'deepseek/deepseek-v4-flash:free', success);
       }
     }
 
     if (pathname.endsWith('/api/calorie-target')) {
+      let success = true;
+      let token = '';
       try {
         const body = await request.json() as any;
+        token = body.token || '';
         const result = await callCalorieTarget(body, openRouterKey);
         return new Response(JSON.stringify(result), {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       } catch (error) {
+        success = false;
         console.error('Error:', error);
         return new Response(
           JSON.stringify({ error: 'Calorie target failed', details: error instanceof Error ? error.message : 'Unknown error' }),
           { status: 500, headers: corsHeaders }
         );
+      } finally {
+        logUsage(env, token, 'calorie-target', 'deepseek/deepseek-v4-flash:free', success);
       }
     }
 
     return new Response('Not found', { status: 404 });
   },
 };
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+async function handleAdmin(request: Request, env: Env): Promise<Response> {
+  const json = await request.json() as { token?: string };
+  if (!env.ADMIN_TOKEN || json.token !== env.ADMIN_TOKEN) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  }
+
+  const db = env.calorie_tracker_sync;
+  const [usageToday, usageWeek, usageMonth, users, records, recent] = await Promise.all([
+    db.prepare(`SELECT endpoint, COUNT(*) as n FROM usage WHERE ts >= date('now') GROUP BY endpoint`).all(),
+    db.prepare(`SELECT endpoint, COUNT(*) as n FROM usage WHERE ts >= date('now', '-7 days') GROUP BY endpoint`).all(),
+    db.prepare(`SELECT endpoint, COUNT(*) as n FROM usage WHERE ts >= date('now', 'start of month') GROUP BY endpoint`).all(),
+    db.prepare(`SELECT COUNT(DISTINCT token) as n FROM usage`).first<{ n: number }>(),
+    db.prepare(`
+      SELECT 'food' as store, COUNT(*) as n FROM food_entries WHERE deleted=0
+      UNION ALL SELECT 'weight', COUNT(*) FROM weight_entries WHERE deleted=0
+      UNION ALL SELECT 'favourites', COUNT(*) FROM favourites WHERE deleted=0
+      UNION ALL SELECT 'profile', COUNT(*) FROM profile
+    `).all(),
+    db.prepare(`SELECT substr(token,1,8) as user, endpoint, success, ts FROM usage ORDER BY ts DESC LIMIT 20`).all(),
+  ]);
+
+  return new Response(JSON.stringify({
+    usageToday:  usageToday.results,
+    usageWeek:   usageWeek.results,
+    usageMonth:  usageMonth.results,
+    totalUsers:  users?.n ?? 0,
+    records:     records.results,
+    recent:      recent.results,
+  }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+}
+
+// ── Usage logging ────────────────────────────────────────────────────────────
+
+function logUsage(env: Env, token: string, endpoint: string, model: string, success: boolean): void {
+  if (!env.calorie_tracker_sync || !token) return;
+  // Fire-and-forget — don't block the response
+  env.calorie_tracker_sync
+    .prepare('INSERT INTO usage (token, endpoint, model, success, ts) VALUES (?, ?, ?, ?, ?)')
+    .bind(token, endpoint, model, success ? 1 : 0, new Date().toISOString())
+    .run()
+    .catch(() => {});
+}
 
 // ── Sync ─────────────────────────────────────────────────────────────────────
 

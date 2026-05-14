@@ -1047,7 +1047,7 @@
                     <div class="card-title">About</div>
                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.8;">
                         Calorie Deficit Tracker<br>
-                        <span id="about-version" style="color: var(--text-tertiary);"></span><br>
+                        <span id="about-version" style="color: var(--text-tertiary); cursor: default;" onclick="app.adminTap()"></span><br>
                         <span style="background: var(--bg-secondary); color: var(--text-secondary); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;">Free Version</span><br>
                         Data stored locally in your browser.<br>
                         No login required.
@@ -1074,6 +1074,19 @@
                 <span class="nav-icon">✨</span>
                 <span>What's New</span>
             </button>
+        </div>
+    </div>
+
+    <!-- Admin modal -->
+    <div class="modal" id="modal-admin">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Admin</div>
+                <button class="modal-close" onclick="app.closeModal('admin')">✕</button>
+            </div>
+            <div class="modal-body" id="admin-body" style="font-size:13px;">
+                <p style="color:var(--text-tertiary);text-align:center;padding:24px 0;">Loading…</p>
+            </div>
         </div>
     </div>
 
@@ -1518,7 +1531,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 35;
+        const APP_BUILD = 36;
 
         const CHANGELOG = [
             {
@@ -2129,6 +2142,7 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            token:                this.getSyncToken(),
                             sex:                  document.getElementById('wizard-sex')?.value || 'male',
                             age:                  parseInt(document.getElementById('wizard-age')?.value) || 30,
                             height_cm:            parseInt(document.getElementById('wizard-height')?.value) || 170,
@@ -2798,6 +2812,79 @@
             macroDiscrepancySVG(p, c, f) { return this.macroThumbSVG(p, c, f, 20); },
             macroItemSVG(p, c, f)        { return this.macroThumbSVG(p, c, f, 32); },
 
+            // ── Admin ────────────────────────────────────────────────────
+
+            _adminTaps: 0,
+            _adminTapTimer: null,
+
+            adminTap() {
+                this._adminTaps = (this._adminTaps || 0) + 1;
+                clearTimeout(this._adminTapTimer);
+                this._adminTapTimer = setTimeout(() => { this._adminTaps = 0; }, 2000);
+                if (this._adminTaps >= 5) {
+                    this._adminTaps = 0;
+                    this.openAdmin();
+                }
+            },
+
+            async openAdmin() {
+                const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
+                this.openModal('admin');
+                document.getElementById('admin-body').innerHTML = '<p style="color:var(--text-tertiary);text-align:center;padding:24px 0;">Loading…</p>';
+                try {
+                    const resp = await fetch(`${WORKER}/api/admin`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: this.getSyncToken() }),
+                    });
+                    if (resp.status === 403) {
+                        document.getElementById('admin-body').innerHTML = '<p style="color:var(--accent-danger);text-align:center;padding:24px 0;">Not authorised.</p>';
+                        return;
+                    }
+                    const d = await resp.json();
+                    const endpointLabel = e => ({ 'extract-nutrition': '📸 Scan', 'daily-insight': '💡 Insight', 'calorie-target': '🎯 Cal Target' }[e] || e);
+                    const usageTable = (rows) => rows.length === 0 ? '<span style="color:var(--text-tertiary)">None</span>' :
+                        rows.map(r => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
+                            <span>${endpointLabel(r.endpoint)}</span><strong>${r.n}</strong></div>`).join('');
+                    document.getElementById('admin-body').innerHTML = `
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+                            <div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;">
+                                <div style="font-size:28px;font-weight:800;color:var(--text-primary);">${d.totalUsers}</div>
+                                <div style="font-size:11px;color:var(--text-tertiary);">Total users</div>
+                            </div>
+                            ${d.records.map(r => `
+                            <div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;">
+                                <div style="font-size:28px;font-weight:800;color:var(--text-primary);">${r.n}</div>
+                                <div style="font-size:11px;color:var(--text-tertiary);">${r.store} entries</div>
+                            </div>`).join('')}
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">AI CALLS — TODAY</div>
+                            ${usageTable(d.usageToday)}
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">AI CALLS — THIS WEEK</div>
+                            ${usageTable(d.usageWeek)}
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">AI CALLS — THIS MONTH</div>
+                            ${usageTable(d.usageMonth)}
+                        </div>
+                        <div>
+                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">RECENT ACTIVITY</div>
+                            ${d.recent.map(r => `
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:12px;">
+                                <span style="color:var(--text-tertiary);font-family:monospace;">${r.user}…</span>
+                                <span>${endpointLabel(r.endpoint)}</span>
+                                <span style="color:${r.success ? 'var(--accent-success)' : 'var(--accent-danger)'};">${r.success ? '✓' : '✗'}</span>
+                                <span style="color:var(--text-tertiary);font-size:11px;">${r.ts.slice(11,16)}</span>
+                            </div>`).join('')}
+                        </div>`;
+                } catch (e) {
+                    document.getElementById('admin-body').innerHTML = '<p style="color:var(--accent-danger);text-align:center;padding:24px 0;">Failed to load.</p>';
+                }
+            },
+
             // ── Sync ─────────────────────────────────────────────────────
 
             getSyncToken() {
@@ -3078,6 +3165,7 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            token: this.getSyncToken(),
                             sex: this.profile.sex,
                             age: this.profile.age,
                             activity_level: this.profile.activity_level,
@@ -3816,6 +3904,7 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
+                                token: this.getSyncToken(),
                                 image_base64: base64,
                                 filename: file.name,
                                 meal_type: document.getElementById('edit-meal-type').value,
@@ -3935,6 +4024,7 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
+                                token: this.getSyncToken(),
                                 image_base64: base64,
                                 filename: file.name,
                                 meal_type: document.getElementById('upload-meal-type').value,

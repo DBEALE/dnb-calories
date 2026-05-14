@@ -426,6 +426,7 @@
 
         .modal-body {
             padding: 16px;
+            padding-bottom: 48px;
         }
 
         /* Charts */
@@ -1259,7 +1260,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 10;
+        const APP_BUILD = 11;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -2161,7 +2162,7 @@
                 preview.style.display = 'none';
                 document.getElementById('extraction-result').innerHTML = '';
 
-                const today = this.getCurrentDateString();
+                const today = this.selectedTodayDate || this.getCurrentDateString();
                 document.getElementById('upload-date').value = today;
 
                 const mealSelect = document.getElementById('upload-meal-type');
@@ -2183,7 +2184,7 @@
             },
 
             openQuickAdd() {
-                const today = this.getCurrentDateString();
+                const today = this.selectedTodayDate || this.getCurrentDateString();
                 document.getElementById('quick-date').value = today;
 
                 const mealSelect = document.getElementById('quick-meal-type');
@@ -2213,7 +2214,7 @@
             },
 
             openFavourites() {
-                const today = this.getCurrentDateString();
+                const today = this.selectedTodayDate || this.getCurrentDateString();
                 document.getElementById('fav-date').value = today;
                 const mealSelect = document.getElementById('fav-meal-type');
                 mealSelect.value = (this.lastMealDate === today && this.lastMealType) ? this.lastMealType : 'breakfast';

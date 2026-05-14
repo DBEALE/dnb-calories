@@ -620,6 +620,16 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Settings comment hints */
+        .settings-comment {
+            font-size: 11px;
+            line-height: 1.5;
+            padding: 7px 10px;
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            margin-top: 6px;
+        }
+
         /* Toggle switch */
         .toggle-switch {
             position: relative;
@@ -940,15 +950,17 @@
                     <div class="card-title">Targets</div>
                     <div class="form-group">
                         <label>Maintenance Calories (kcal)</label>
-                        <input type="number" id="settings-maintenance" onchange="app.updateProfile()">
-                    </div>
-                    <div class="form-group">
-                        <label>Daily Target (kcal)</label>
-                        <input type="number" id="settings-target" onchange="app.updateProfile()">
+                        <input type="number" id="settings-maintenance" oninput="app.updateSettingsComments()" onchange="app.updateProfile()">
+                        <div id="comment-maintenance" class="settings-comment" style="display:none;"></div>
                     </div>
                     <div class="form-group">
                         <label>Target Loss Rate (kg/week)</label>
-                        <input type="number" id="settings-loss-rate" onchange="app.updateProfile()" step="0.1" min="0.25" max="1">
+                        <input type="number" id="settings-loss-rate" oninput="app.updateSettingsComments()" onchange="app.updateProfile()" step="0.1" min="0.25" max="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Daily Target (kcal)</label>
+                        <input type="number" id="settings-target" oninput="app.updateSettingsComments()" onchange="app.updateProfile()">
+                        <div id="comment-target" class="settings-comment" style="display:none;"></div>
                     </div>
                 </div>
 
@@ -957,20 +969,21 @@
                     <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">Set your ideal macro split. Targets should add up to 100%.</p>
                     <div class="upload-form-row">
                         <label>Protein</label>
-                        <input type="number" id="settings-macro-protein" min="5" max="60" oninput="app.updateMacroSum()" onchange="app.updateProfile()">
+                        <input type="number" id="settings-macro-protein" min="5" max="60" oninput="app.updateMacroSum();app.updateSettingsComments();" onchange="app.updateProfile()">
                         <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">%</span>
                     </div>
                     <div class="upload-form-row">
                         <label>Carbs</label>
-                        <input type="number" id="settings-macro-carbs" min="10" max="80" oninput="app.updateMacroSum()" onchange="app.updateProfile()">
+                        <input type="number" id="settings-macro-carbs" min="10" max="80" oninput="app.updateMacroSum();app.updateSettingsComments();" onchange="app.updateProfile()">
                         <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">%</span>
                     </div>
                     <div class="upload-form-row">
                         <label>Fat</label>
-                        <input type="number" id="settings-macro-fat" min="5" max="60" oninput="app.updateMacroSum()" onchange="app.updateProfile()">
+                        <input type="number" id="settings-macro-fat" min="5" max="60" oninput="app.updateMacroSum();app.updateSettingsComments();" onchange="app.updateProfile()">
                         <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">%</span>
                     </div>
                     <div id="macro-sum-indicator" style="text-align: center; font-size: 13px; font-weight: 600; margin-top: 8px; padding: 8px; border-radius: 8px; background: var(--bg-secondary);">Total: 100% ✓</div>
+                    <div id="comment-macros" class="settings-comment" style="display:none; margin-top:8px;"></div>
                 </div>
 
                 <div class="card">
@@ -998,9 +1011,10 @@
                     </div>
                     <div class="upload-form-row">
                         <label>Salt</label>
-                        <input type="number" id="settings-rda-salt" min="0" step="0.1" onchange="app.updateProfile()">
+                        <input type="number" id="settings-rda-salt" min="0" step="0.1" oninput="app.updateSettingsComments()" onchange="app.updateProfile()">
                         <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">g</span>
                     </div>
+                    <div id="comment-rda" class="settings-comment" style="display:none; margin-top:8px;"></div>
                 </div>
 
                 <div class="card">
@@ -1491,9 +1505,31 @@
     </div>
 
     <script>
-        const APP_BUILD = 27;
+        const APP_BUILD = 28;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'Full data export and import',
+                items: [
+                    'Export now includes profile/config, food entries, weight entries, and favourites',
+                    'Import restores all four data types including favourites',
+                    'Import confirmation shows a count of what was restored (e.g. "42 food entries, 3 favourites")',
+                    'Export file now includes the app build version and export timestamp',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Smart validation comments in Settings',
+                items: [
+                    'Maintenance Calories: compares your value against the Mifflin-St Jeor estimate for your profile — flags if more than 20% different',
+                    'Daily Target: shows projected kg/week loss, warns if below safe minimum or loss rate is too aggressive',
+                    'Target Loss Rate moved above Daily Target so the AI wizard flow matches the settings order',
+                    'Macro Targets: notes if protein is too low for muscle retention, carbs too low for activity level, or fat exceeds guidelines',
+                    'Nutrition RDA: flags any value that differs by more than 30% from UK RDA/RNI reference values',
+                    'Comments update live as you type and when settings are loaded',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Delete All Data in Settings',
@@ -2135,6 +2171,7 @@
                 document.getElementById('settings-macro-carbs').value   = this.profile.macro_carbs_pct   ?? 55;
                 document.getElementById('settings-macro-fat').value     = this.profile.macro_fat_pct     ?? 30;
                 this.updateMacroSum();
+                this.updateSettingsComments();
                 const rda = this.calculateRDA();
                 if (rda) {
                     document.getElementById('settings-rda-protein').value = rda.protein;
@@ -2168,6 +2205,102 @@
                     updated_at: new Date().toISOString()
                 };
                 this.saveProfile(profile);
+            },
+
+            updateSettingsComments() {
+                const el = (id) => document.getElementById(id);
+                const show = (id, icon, text, color) => {
+                    const div = el(id);
+                    if (!div) return;
+                    if (!text) { div.style.display = 'none'; return; }
+                    div.style.display = 'block';
+                    div.style.color = color;
+                    div.innerHTML = `<span style="font-weight:700;">${icon}</span> ${text}`;
+                };
+
+                // ── Maintenance vs Mifflin-St Jeor estimate ───────────
+                const sex        = el('settings-sex')?.value;
+                const age        = parseInt(el('settings-age')?.value)    || 0;
+                const heightCm   = parseInt(el('settings-height')?.value) || 0;
+                const weightKg   = parseFloat(el('settings-weight')?.value) || 0;
+                const activity   = el('settings-activity')?.value;
+                const maintenance = parseInt(el('settings-maintenance')?.value) || 0;
+                const target     = parseInt(el('settings-target')?.value) || 0;
+
+                if (age && heightCm && weightKg && maintenance) {
+                    let bmr = sex === 'male'
+                        ? 10*weightKg + 6.25*heightCm - 5*age + 5
+                        : 10*weightKg + 6.25*heightCm - 5*age - 161;
+                    const factors = { sedentary:1.2, light:1.375, moderate:1.55, very:1.725 };
+                    const est = Math.round(bmr * (factors[activity] || 1.55));
+                    const pct = Math.abs(maintenance - est) / est;
+                    if (pct < 0.08)
+                        show('comment-maintenance', '✓', `Matches your calculated estimate of ${est} kcal/day.`, '#10b981');
+                    else if (pct < 0.2)
+                        show('comment-maintenance', '💡', `Calculated estimate is ${est} kcal/day — small difference may reflect personal metabolism.`, '#f59e0b');
+                    else
+                        show('comment-maintenance', '⚠️', `Calculated estimate is ${est} kcal/day — a ${Math.round(pct*100)}% difference. Double-check this value.`, '#ef4444');
+                } else {
+                    show('comment-maintenance', '', '', '');
+                }
+
+                // ── Daily target vs maintenance ────────────────────────
+                if (maintenance && target) {
+                    const deficit = maintenance - target;
+                    const weeklyLoss = (deficit * 7 / 7700).toFixed(2);
+                    const minSafe = sex === 'male' ? 1500 : 1200;
+                    if (target < minSafe)
+                        show('comment-target', '⚠️', `Below the safe minimum of ${minSafe} kcal/day — consider increasing.`, '#ef4444');
+                    else if (deficit < 0)
+                        show('comment-target', '💡', `Above maintenance by ${Math.abs(deficit)} kcal/day — this would result in weight gain.`, '#f59e0b');
+                    else if (parseFloat(weeklyLoss) > 1)
+                        show('comment-target', '⚠️', `Projected ${weeklyLoss} kg/week loss — aggressive. 0.5–0.75 kg/week is more sustainable.`, '#f59e0b');
+                    else
+                        show('comment-target', '✓', `${deficit} kcal/day deficit — projected ~${weeklyLoss} kg/week loss. Looks sustainable.`, '#10b981');
+                } else {
+                    show('comment-target', '', '', '');
+                }
+
+                // ── Macro split ────────────────────────────────────────
+                const mp = parseInt(el('settings-macro-protein')?.value) || 0;
+                const mc = parseInt(el('settings-macro-carbs')?.value)   || 0;
+                const mf = parseInt(el('settings-macro-fat')?.value)     || 0;
+                const msum = mp + mc + mf;
+                if (msum && msum !== 100) {
+                    show('comment-macros', '⚠️', `Total is ${msum}% — must equal 100%.`, '#ef4444');
+                } else if (msum === 100) {
+                    const notes = [];
+                    if (mp < 10) notes.push(`Protein at ${mp}% is low — at least 15% helps preserve muscle during weight loss.`);
+                    else if (mp > 30) notes.push(`Protein at ${mp}% is high — good for satiety and muscle retention.`);
+                    if (mc < 35) notes.push(`Carbs at ${mc}% is quite low — ensure adequate energy for your activity level.`);
+                    if (mf > 40) notes.push(`Fat at ${mf}% exceeds typical recommendations (≤35%).`);
+                    const ok = notes.length === 0;
+                    show('comment-macros', ok ? '✓' : '💡',
+                        ok ? 'Macro split is balanced and within typical guidelines.' : notes.join(' '),
+                        ok ? '#10b981' : '#f59e0b');
+                } else {
+                    show('comment-macros', '', '', '');
+                }
+
+                // ── Nutrition RDA vs UK reference ─────────────────────
+                const rdaP  = parseFloat(el('settings-rda-protein')?.value) || 0;
+                const rdaC  = parseFloat(el('settings-rda-carbs')?.value)   || 0;
+                const rdaF  = parseFloat(el('settings-rda-fat')?.value)     || 0;
+                const rdaFi = parseFloat(el('settings-rda-fiber')?.value)   || 0;
+                const rdaSalt = parseFloat(el('settings-rda-salt')?.value)  || 0;
+                const ukP = sex === 'male' ? 55.5 : 45, ukC = sex === 'male' ? 333 : 267;
+                const ukF = sex === 'male' ? 97 : 78, ukFi = 30, ukSalt = 6;
+                const rdaIssues = [];
+                const chk = (v, uk, name, unit) => { if (v && Math.abs(v-uk)/uk > 0.3) rdaIssues.push(`${name} (${v}${unit}) differs from UK RDA of ${uk}${unit}.`); };
+                chk(rdaP, ukP, 'Protein', 'g'); chk(rdaC, ukC, 'Carbs', 'g');
+                chk(rdaF, ukF, 'Fat', 'g'); chk(rdaFi, ukFi, 'Fibre', 'g'); chk(rdaSalt, ukSalt, 'Salt', 'g');
+                if (rdaP || rdaC || rdaF) {
+                    show('comment-rda', rdaIssues.length ? '💡' : '✓',
+                        rdaIssues.length ? rdaIssues.join(' ') : 'All values are in line with UK RDA/RNI recommendations.',
+                        rdaIssues.length ? '#f59e0b' : '#10b981');
+                } else {
+                    show('comment-rda', '', '', '');
+                }
             },
 
             updateMacroSum() {
@@ -3269,6 +3402,7 @@
                         carbs_g: fav.carbs_g,
                         fat_g: fav.fat_g,
                         fibre_g: fav.fibre_g,
+                        salt_g: fav.salt_g,
                         source_type: 'favourite',
                         created_at: new Date().toISOString(),
                     };
@@ -3838,27 +3972,25 @@
             },
 
             exportData() {
+                const readAll = (storeName) => new Promise((resolve) => {
+                    const req = db.transaction([storeName], 'readonly').objectStore(storeName).getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve([]);
+                });
+
                 Promise.all([
-                    new Promise((resolve) => {
-                        const transaction = db.transaction(['foodEntries'], 'readonly');
-                        const store = transaction.objectStore('foodEntries');
-                        const request = store.getAll();
-                        request.onsuccess = () => resolve(request.result);
-                    }),
-                    new Promise((resolve) => {
-                        const transaction = db.transaction(['weightEntries'], 'readonly');
-                        const store = transaction.objectStore('weightEntries');
-                        const request = store.getAll();
-                        request.onsuccess = () => resolve(request.result);
-                    })
-                ]).then(([foods, weights]) => {
+                    readAll('foodEntries'),
+                    readAll('weightEntries'),
+                    readAll('favourites'),
+                ]).then(([foods, weights, favourites]) => {
                     const data = {
+                        version: APP_BUILD,
+                        exportedAt: new Date().toISOString(),
                         profile: this.profile,
                         foodEntries: foods,
                         weightEntries: weights,
-                        exportedAt: new Date().toISOString()
+                        favourites: favourites,
                     };
-                    
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -3876,34 +4008,40 @@
             processImport(event) {
                 const file = event.target.files[0];
                 if (!file) return;
-                
+
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
-                        
-                        const transaction = db.transaction(['profile', 'foodEntries', 'weightEntries'], 'readwrite');
-                        
+
+                        const stores = ['profile', 'foodEntries', 'weightEntries', 'favourites'];
+                        const transaction = db.transaction(stores, 'readwrite');
+
                         if (data.profile) {
                             transaction.objectStore('profile').put(data.profile);
                         }
-                        
-                        if (data.foodEntries) {
-                            data.foodEntries.forEach(entry => {
-                                delete entry.id;
-                                transaction.objectStore('foodEntries').add(entry);
+
+                        const importList = (storeName, items) => {
+                            if (!Array.isArray(items)) return;
+                            const store = transaction.objectStore(storeName);
+                            items.forEach(entry => {
+                                const copy = { ...entry };
+                                delete copy.id;
+                                store.add(copy);
                             });
-                        }
-                        
-                        if (data.weightEntries) {
-                            data.weightEntries.forEach(entry => {
-                                delete entry.id;
-                                transaction.objectStore('weightEntries').add(entry);
-                            });
-                        }
-                        
+                        };
+
+                        importList('foodEntries',  data.foodEntries);
+                        importList('weightEntries', data.weightEntries);
+                        importList('favourites',    data.favourites);
+
                         transaction.oncomplete = () => {
-                            alert('Data imported successfully');
+                            const counts = [
+                                data.foodEntries?.length  ? `${data.foodEntries.length} food entries` : '',
+                                data.weightEntries?.length ? `${data.weightEntries.length} weight entries` : '',
+                                data.favourites?.length    ? `${data.favourites.length} favourites` : '',
+                            ].filter(Boolean).join(', ');
+                            alert(`Import successful.\n\n${counts || 'No entries found.'}`);
                             this.loadProfile();
                         };
                     } catch (err) {

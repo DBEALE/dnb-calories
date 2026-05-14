@@ -630,26 +630,8 @@
             <!-- Log Screen -->
             <div class="screen active" id="screen-today">
 
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-label">Consumed</div>
-                        <div><span class="kpi-value" id="today-consumed">0</span><span class="kpi-unit">kcal</span></div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Target</div>
-                        <div><span class="kpi-value" id="today-target">0</span><span class="kpi-unit">kcal</span></div>
-                    </div>
-                </div>
-
-                <div class="kpi-grid">
-                    <div class="kpi-card success" id="remaining-card">
-                        <div class="kpi-label">Remaining</div>
-                        <div><span class="kpi-value" id="today-remaining">0</span><span class="kpi-unit">kcal</span></div>
-                    </div>
-                    <div class="kpi-card" id="deficit-card">
-                        <div class="kpi-label">vs Maintenance</div>
-                        <div><span class="kpi-value" id="today-deficit">0</span><span class="kpi-unit">kcal</span></div>
-                    </div>
+                <div class="card" style="padding: 20px 16px 16px;">
+                    <div id="calorie-ring-container"></div>
                 </div>
 
                 <div class="quick-actions">
@@ -697,41 +679,64 @@
 
             <!-- History Screen -->
             <div class="screen" id="screen-history">
-                <div style="display: flex; background: var(--bg-secondary); border-radius: 8px; padding: 4px; margin-bottom: 12px; gap: 4px;">
-                    <button id="hist-btn-week"  onclick="app.setHistoryPeriod('week')"  style="flex:1;padding:8px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;background:white;color:var(--accent-info);">Week</button>
-                    <button id="hist-btn-month" onclick="app.setHistoryPeriod('month')" style="flex:1;padding:8px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;background:transparent;color:var(--text-secondary);">Month</button>
-                    <button id="hist-btn-year"  onclick="app.setHistoryPeriod('year')"  style="flex:1;padding:8px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;background:transparent;color:var(--text-secondary);">Year</button>
+
+                <!-- Period selector -->
+                <div style="display: flex; background: var(--bg-secondary); border-radius: 12px; padding: 4px; margin-bottom: 14px; gap: 4px;">
+                    <button id="hist-btn-week"  onclick="app.setHistoryPeriod('week')"  style="flex:1;padding:9px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;background:white;color:var(--accent-info);box-shadow:0 1px 4px rgba(0,0,0,0.08);">Week</button>
+                    <button id="hist-btn-month" onclick="app.setHistoryPeriod('month')" style="flex:1;padding:9px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;background:transparent;color:var(--text-secondary);">Month</button>
+                    <button id="hist-btn-year"  onclick="app.setHistoryPeriod('year')"  style="flex:1;padding:9px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;background:transparent;color:var(--text-secondary);">Year</button>
                 </div>
 
+                <!-- KPI summary -->
+                <div class="kpi-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
+                    <div class="kpi-card" style="padding: 12px;">
+                        <div class="kpi-label" style="font-size: 10px;">Total</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.5px;" id="history-total">0</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">kcal</div>
+                    </div>
+                    <div class="kpi-card success" style="padding: 12px;">
+                        <div class="kpi-label" style="font-size: 10px;">Deficit</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.5px;" id="history-deficit">0</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">kcal</div>
+                    </div>
+                    <div class="kpi-card" style="padding: 12px;">
+                        <div class="kpi-label" style="font-size: 10px;">Avg / Day</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.5px;" id="history-avg">0</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">kcal</div>
+                    </div>
+                    <div class="kpi-card" style="padding: 12px;">
+                        <div class="kpi-label" style="font-size: 10px;">Fat Loss</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.5px;" id="history-loss">0</div>
+                        <div style="font-size: 10px; color: var(--text-secondary);">kg est.</div>
+                    </div>
+                </div>
+
+                <!-- Calorie chart -->
                 <div class="card">
                     <div class="card-title" id="history-chart-title">This Week</div>
-                    <div class="chart-container">
+                    <div class="chart-container" style="height: 220px;">
                         <canvas id="history-chart"></canvas>
                     </div>
                 </div>
 
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-label">Total</div>
-                        <div><span class="kpi-value" id="history-total">0</span><span class="kpi-unit">kcal</span></div>
+                <!-- Macro breakdown -->
+                <div class="card">
+                    <div class="card-title">Macro Breakdown</div>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div style="flex-shrink: 0; width: 130px; height: 130px; position: relative;">
+                            <canvas id="history-macros-chart"></canvas>
+                            <div id="history-macro-centre" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;">
+                                <div style="font-size: 18px; font-weight: 800; color: var(--text-primary);"></div>
+                            </div>
+                        </div>
+                        <div style="flex: 1;" id="history-macro-stats">
+                            <p style="font-size: 12px; color: var(--text-secondary);">No macro data for this period.</p>
+                        </div>
                     </div>
-                    <div class="kpi-card success">
-                        <div class="kpi-label">Deficit</div>
-                        <div><span class="kpi-value" id="history-deficit">0</span><span class="kpi-unit">kcal</span></div>
-                    </div>
+                    <p id="history-macro-note" style="font-size: 11px; color: var(--text-tertiary); margin-top: 10px; display: none;">Macro data is only available for entries logged via label scan.</p>
                 </div>
 
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-label">Daily Average</div>
-                        <div><span class="kpi-value" id="history-avg">0</span><span class="kpi-unit">kcal</span></div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Est. Fat Loss</div>
-                        <div><span class="kpi-value" id="history-loss">0</span><span class="kpi-unit">kg</span></div>
-                    </div>
-                </div>
-
+                <!-- Insight -->
                 <div class="card">
                     <div class="card-title">Insight</div>
                     <div id="history-insight"><p style="color: var(--text-secondary); font-size: 12px;">No data logged for this period.</p></div>
@@ -1307,7 +1312,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 16;
+        const APP_BUILD = 17;
 
         const CHANGELOG = [
             {
@@ -1799,31 +1804,8 @@
                 const maintenance = this.profile?.maintenance_kcal || 2500;
                 const deficit = maintenance - consumed;
 
-                // Update KPIs
-                document.getElementById('today-consumed').textContent = consumed;
-                document.getElementById('today-target').textContent = target;
-                document.getElementById('today-remaining').textContent = remaining;
-                document.getElementById('today-deficit').textContent = Math.round(deficit);
-                
-                // Color code remaining
-                const remainingCard = document.getElementById('remaining-card');
-                remainingCard.className = 'kpi-card';
-                if (remaining > 0) {
-                    remainingCard.classList.add('success');
-                } else if (remaining < -200) {
-                    remainingCard.classList.add('danger');
-                } else {
-                    remainingCard.classList.add('warning');
-                }
-
-                // Color code deficit
-                const deficitCard = document.getElementById('deficit-card');
-                deficitCard.className = 'kpi-card';
-                if (deficit > 0) {
-                    deficitCard.classList.add('success');
-                } else {
-                    deficitCard.classList.add('warning');
-                }
+                // Calorie + macro rings
+                this.renderCalorieRing({ consumed, target, maintenance, deficit, protein, carbs, fat, fiber, salt });
 
 
                 // Meals
@@ -1895,6 +1877,96 @@
                 } else {
                     document.getElementById('today-insight').innerHTML = '<p style="color: var(--text-secondary); font-size: 12px;">Log a meal to get your AI insight.</p>';
                 }
+            },
+
+            renderCalorieRing({ consumed, target, maintenance, deficit, protein, carbs, fat, fiber, salt }) {
+                const rda = this.calculateRDA();
+                const pct = target > 0 ? consumed / target : 0;
+                const isOver = pct > 1;
+                const remaining = target - consumed;
+
+                // Ring colour based on progress
+                const ringColor = pct > 1 ? '#ef4444' : pct > 0.9 ? '#f97316' : pct > 0.75 ? '#f59e0b' : '#10b981';
+
+                // Main ring
+                const r1 = 76, sw1 = 15, size = 200;
+                const c1 = +(2 * Math.PI * r1).toFixed(2);
+                const p1 = +(Math.min(pct, 1) * c1).toFixed(2);
+
+                // Overflow spiral (inner ring, slightly smaller radius = coil-inward effect)
+                const r2 = 58, sw2 = 11;
+                const c2 = +(2 * Math.PI * r2).toFixed(2);
+                const overflowPct = isOver ? pct - 1 : 0;
+                const p2 = +(Math.min(overflowPct, 1) * c2).toFixed(2);
+
+                const remainText = isOver
+                    ? `<span style="color:#ef4444;font-weight:700;">${Math.abs(Math.round(remaining)).toLocaleString()} kcal over</span>`
+                    : remaining > 0
+                        ? `<span style="color:#10b981;font-weight:700;">${Math.round(remaining).toLocaleString()} kcal left</span>`
+                        : `<span style="color:#f59e0b;font-weight:700;">Target reached</span>`;
+
+                const deficitSign = deficit > 0 ? '▾' : '▴';
+                const deficitColor = deficit > 0 ? '#10b981' : '#f59e0b';
+
+                // Mini ring helper — sized to fit 5 across on mobile
+                const miniRing = (label, g, rdaG, color, decimals = 0) => {
+                    const mr = 22, msw = 6, sz = 54;
+                    const mc = +(2 * Math.PI * mr).toFixed(2);
+                    const mpct = rdaG > 0 ? Math.min(g / rdaG, 1) : 0;
+                    const mp = +(mpct * mc).toFixed(2);
+                    const mColor = mpct >= 1 ? '#ef4444' : color;
+                    const pctLabel = rdaG > 0 ? Math.round(g / rdaG * 100) + '%' : '—';
+                    const valLabel = decimals > 0 ? g.toFixed(decimals) : Math.round(g);
+                    return `
+                        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
+                            <div style="position:relative;width:${sz}px;height:${sz}px;">
+                                <svg viewBox="0 0 ${sz} ${sz}" style="width:${sz}px;height:${sz}px;">
+                                    <circle cx="${sz/2}" cy="${sz/2}" r="${mr}" fill="none" stroke="var(--bg-secondary)" stroke-width="${msw}"/>
+                                    <circle cx="${sz/2}" cy="${sz/2}" r="${mr}" fill="none" stroke="${mColor}" stroke-width="${msw}"
+                                        stroke-dasharray="${mp} ${mc}" stroke-linecap="round"
+                                        transform="rotate(-90 ${sz/2} ${sz/2})"/>
+                                </svg>
+                                <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                                    <div style="font-size:11px;font-weight:800;color:var(--text-primary);line-height:1;">${valLabel}g</div>
+                                    <div style="font-size:8px;color:var(--text-tertiary);font-weight:600;">${pctLabel}</div>
+                                </div>
+                            </div>
+                            <div style="font-size:10px;font-weight:600;color:var(--text-secondary);text-align:center;">${label}</div>
+                        </div>`;
+                };
+
+                const macroRow = rda ? `
+                    <div style="display:flex;gap:4px;justify-content:space-around;padding-top:12px;border-top:1px solid var(--border-color);margin-top:12px;">
+                        ${miniRing('Protein', protein,  rda.protein, '#f59e0b')}
+                        ${miniRing('Carbs',   carbs,    rda.carbs,   '#0ea5e9')}
+                        ${miniRing('Fat',     fat,      rda.fat,     '#8b5cf6')}
+                        ${miniRing('Fibre',   fiber,    rda.fiber,   '#10b981')}
+                        ${miniRing('Salt',    salt,     rda.salt,    '#06b6d4', 1)}
+                    </div>` : '';
+
+                document.getElementById('calorie-ring-container').innerHTML = `
+                    <div style="position:relative;">
+                        <svg viewBox="0 0 ${size} ${size}" style="width:100%;max-width:220px;display:block;margin:0 auto;">
+                            <circle cx="100" cy="100" r="${r1}" fill="none" stroke="var(--bg-secondary)" stroke-width="${sw1}"/>
+                            <circle cx="100" cy="100" r="${r1}" fill="none" stroke="${ringColor}" stroke-width="${sw1}"
+                                stroke-dasharray="${p1} ${c1}" stroke-linecap="round"
+                                transform="rotate(-90 100 100)"/>
+                            ${isOver ? `
+                            <circle cx="100" cy="100" r="${r2}" fill="none" stroke="rgba(239,68,68,0.18)" stroke-width="${sw2}"/>
+                            <circle cx="100" cy="100" r="${r2}" fill="none" stroke="#ef4444" stroke-width="${sw2}"
+                                stroke-dasharray="${p2} ${c2}" stroke-linecap="round"
+                                transform="rotate(-90 100 100)"/>` : ''}
+                        </svg>
+                        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;">
+                            <div style="font-size:34px;font-weight:800;color:var(--text-primary);letter-spacing:-1.5px;line-height:1;">${consumed.toLocaleString()}</div>
+                            <div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-top:2px;">OF ${target.toLocaleString()} KCAL</div>
+                            <div style="font-size:13px;margin-top:6px;">${remainText}</div>
+                        </div>
+                    </div>
+                    <div style="text-align:center;font-size:12px;font-weight:600;color:${deficitColor};margin:6px 0 4px;">
+                        ${deficitSign} ${Math.abs(Math.round(deficit)).toLocaleString()} kcal vs maintenance
+                    </div>
+                    ${macroRow}`;
             },
 
             groupMealsByType(entries) {
@@ -2083,11 +2155,23 @@
                 const maintenance = this.profile?.maintenance_kcal || 2500;
                 const target = this.profile?.target_kcal || 2000;
                 let labels = [], dailyTotals = [], chartType = 'bar', mealDatasets = [];
+                let totalProtein = 0, totalCarbs = 0, totalFat = 0, macroEntryCount = 0;
 
                 const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'];
                 const mealColors = {
                     breakfast: 'rgba(245,158,11,1)', lunch: 'rgba(16,185,129,1)',
                     dinner: 'rgba(239,68,68,1)', snack: 'rgba(168,85,247,1)', drink: 'rgba(20,184,166,1)'
+                };
+
+                const sumMacros = (entries) => {
+                    entries.forEach(e => {
+                        if (e.protein_g || e.carbs_g || e.fat_g) {
+                            totalProtein += e.protein_g || 0;
+                            totalCarbs   += e.carbs_g   || 0;
+                            totalFat     += e.fat_g     || 0;
+                            macroEntryCount++;
+                        }
+                    });
                 };
 
                 const titles = { week: 'This Week', month: 'This Month', year: 'This Year' };
@@ -2105,6 +2189,7 @@
                         const entries = await this.getFoodEntries(dateStr);
                         dailyTotals.push(entries.reduce((s, e) => s + (e.calories || 0), 0));
                         labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+                        sumMacros(entries);
                         mealTypes.forEach(type => {
                             mealTypeTotals[type].push(entries.filter(e => e.meal_type === type).reduce((s, e) => s + (e.calories || 0), 0));
                         });
@@ -2121,6 +2206,7 @@
                         const entries = await this.getFoodEntries(dateStr);
                         dailyTotals.push(entries.reduce((s, e) => s + (e.calories || 0), 0));
                         labels.push(i);
+                        sumMacros(entries);
                     }
 
                 } else { // year
@@ -2128,8 +2214,10 @@
                     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                     for (let m = 0; m < 12; m++) {
                         const monthStr = `${today.getFullYear()}-${String(m+1).padStart(2,'0')}`;
-                        dailyTotals.push(allEntries.filter(e => e.date?.startsWith(monthStr)).reduce((s, e) => s + (e.calories || 0), 0));
+                        const monthEntries = allEntries.filter(e => e.date?.startsWith(monthStr));
+                        dailyTotals.push(monthEntries.reduce((s, e) => s + (e.calories || 0), 0));
                         labels.push(monthNames[m]);
+                        sumMacros(monthEntries);
                     }
                 }
 
@@ -2139,9 +2227,9 @@
                 const periodDays = period === 'year' ? 365 : dailyTotals.length;
                 const deficit = (maintenance * periodDays) - total;
 
-                document.getElementById('history-total').textContent = total;
-                document.getElementById('history-deficit').textContent = Math.round(deficit);
-                document.getElementById('history-avg').textContent = avgDaily;
+                document.getElementById('history-total').textContent = total.toLocaleString();
+                document.getElementById('history-deficit').textContent = Math.round(deficit).toLocaleString();
+                document.getElementById('history-avg').textContent = avgDaily.toLocaleString();
                 document.getElementById('history-loss').textContent = (Math.max(0, deficit) / 7700).toFixed(2);
 
                 this.createChart('history-chart', chartType, {
@@ -2152,7 +2240,71 @@
                     ]
                 }, { legend: { display: mealDatasets.length > 0 } });
 
+                this.renderMacrosChart({ protein: totalProtein, carbs: totalCarbs, fat: totalFat, hasData: macroEntryCount > 0 });
                 this.renderHistoryInsight({ total, avgDaily, daysWithData, period, deficit, target, maintenance, dailyTotals });
+            },
+
+            renderMacrosChart({ protein, carbs, fat, hasData }) {
+                const noteEl = document.getElementById('history-macro-note');
+                const statsEl = document.getElementById('history-macro-stats');
+
+                if (!hasData || (protein === 0 && carbs === 0 && fat === 0)) {
+                    if (this.charts['history-macros-chart']) {
+                        this.charts['history-macros-chart'].destroy();
+                        delete this.charts['history-macros-chart'];
+                    }
+                    statsEl.innerHTML = '<p style="font-size: 12px; color: var(--text-secondary);">No macro data for this period.</p>';
+                    noteEl.style.display = 'block';
+                    return;
+                }
+
+                const pKcal = protein * 4;
+                const cKcal = carbs * 4;
+                const fKcal = fat * 9;
+                const totalKcal = pKcal + cKcal + fKcal;
+                const pct = v => totalKcal > 0 ? Math.round(v / totalKcal * 100) : 0;
+
+                const macros = [
+                    { label: 'Protein', g: Math.round(protein), kcal: pKcal, color: '#f59e0b', pct: pct(pKcal) },
+                    { label: 'Carbs',   g: Math.round(carbs),   kcal: cKcal, color: '#0ea5e9', pct: pct(cKcal) },
+                    { label: 'Fat',     g: Math.round(fat),     kcal: fKcal, color: '#8b5cf6', pct: pct(fKcal) },
+                ];
+
+                this.createChart('history-macros-chart', 'doughnut', {
+                    labels: macros.map(m => m.label),
+                    datasets: [{
+                        data: macros.map(m => m.kcal),
+                        backgroundColor: macros.map(m => m.color),
+                        borderWidth: 0,
+                        hoverOffset: 4,
+                    }]
+                }, {
+                    legend: { display: false },
+                    _cutout: '68%',
+                    _plugins: true,
+                });
+
+                // Override cutout for doughnut
+                if (this.charts['history-macros-chart']) {
+                    this.charts['history-macros-chart'].options.cutout = '68%';
+                    this.charts['history-macros-chart'].update();
+                }
+
+                statsEl.innerHTML = macros.map(m => `
+                    <div style="margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="width: 10px; height: 10px; border-radius: 50%; background: ${m.color}; display: inline-block; flex-shrink: 0;"></span>
+                                <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${m.label}</span>
+                            </div>
+                            <span style="font-size: 12px; color: var(--text-secondary);">${m.g}g &nbsp;<strong style="color: ${m.color};">${m.pct}%</strong></span>
+                        </div>
+                        <div style="background: var(--bg-secondary); border-radius: 4px; height: 5px; overflow: hidden;">
+                            <div style="width: ${m.pct}%; background: ${m.color}; height: 100%; border-radius: 4px; transition: width 0.5s ease;"></div>
+                        </div>
+                    </div>`).join('');
+
+                noteEl.style.display = 'none';
             },
 
             renderHistoryInsight({ total, avgDaily, daysWithData, period, deficit, target, maintenance, dailyTotals }) {
@@ -2322,7 +2474,7 @@
                 if (this.charts[elementId]) {
                     this.charts[elementId].destroy();
                 }
-                
+                const isDoughnut = type === 'doughnut' || type === 'pie';
                 const ctx = document.getElementById(elementId).getContext('2d');
                 this.charts[elementId] = new Chart(ctx, {
                     type: type,
@@ -2330,21 +2482,13 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        cutout: isDoughnut ? '68%' : undefined,
                         plugins: {
                             legend: Object.assign({ display: false }, pluginOverrides?.legend)
                         },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
-                                }
-                            },
-                            x: {
-                                grid: {
-                                    display: false
-                                }
-                            }
+                        scales: isDoughnut ? {} : {
+                            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                            x: { grid: { display: false } }
                         }
                     }
                 });

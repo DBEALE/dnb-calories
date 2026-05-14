@@ -45,7 +45,7 @@ interface SyncRequest {
 
 interface Env {
   OPENROUTER_API_KEY: string;
-  DB: D1Database;
+  calorie_tracker_sync: D1Database;
 }
 
 interface InsightRequest {
@@ -158,7 +158,7 @@ export default {
 // ── Sync ─────────────────────────────────────────────────────────────────────
 
 async function handleSync(request: Request, env: Env): Promise<Response> {
-  if (!env.DB) {
+  if (!env.calorie_tracker_sync) {
     return new Response(JSON.stringify({ error: 'Sync not configured' }), {
       status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
@@ -186,8 +186,8 @@ async function handleSync(request: Request, env: Env): Promise<Response> {
 
   // Upsert food entries
   for (const batch of chunk(foodEntries)) {
-    await env.DB.batch(batch.map((e: any) =>
-      env.DB.prepare(`
+    await env.calorie_tracker_sync.batch(batch.map((e: any) =>
+      env.calorie_tracker_sync.prepare(`
         INSERT INTO food_entries
           (sync_id,token,date,time,meal_type,food_name,brand,serving_description,
            calories,protein_g,carbs_g,fat_g,fibre_g,salt_g,sugar_g,
@@ -215,8 +215,8 @@ async function handleSync(request: Request, env: Env): Promise<Response> {
 
   // Upsert weight entries
   for (const batch of chunk(weightEntries)) {
-    await env.DB.batch(batch.map((e: any) =>
-      env.DB.prepare(`
+    await env.calorie_tracker_sync.batch(batch.map((e: any) =>
+      env.calorie_tracker_sync.prepare(`
         INSERT INTO weight_entries (sync_id,token,date,time,weight_kg,is_morning,note,updated_at,deleted)
         VALUES (?,?,?,?,?,?,?,?,?)
         ON CONFLICT(sync_id) DO UPDATE SET
@@ -233,8 +233,8 @@ async function handleSync(request: Request, env: Env): Promise<Response> {
 
   // Upsert favourites
   for (const batch of chunk(favourites)) {
-    await env.DB.batch(batch.map((e: any) =>
-      env.DB.prepare(`
+    await env.calorie_tracker_sync.batch(batch.map((e: any) =>
+      env.calorie_tracker_sync.prepare(`
         INSERT INTO favourites
           (sync_id,token,food_name,brand,serving_description,calories,
            protein_g,carbs_g,fat_g,fibre_g,salt_g,meal_type,updated_at,deleted)
@@ -258,7 +258,7 @@ async function handleSync(request: Request, env: Env): Promise<Response> {
 
   // Upsert profile
   if (profile && profile.updated_at) {
-    await env.DB.prepare(`
+    await env.calorie_tracker_sync.prepare(`
       INSERT INTO profile (token, data, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(token) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
       WHERE excluded.updated_at > profile.updated_at
@@ -268,10 +268,10 @@ async function handleSync(request: Request, env: Env): Promise<Response> {
   // Fetch records newer than since
   const serverTime = new Date().toISOString();
   const [newFood, newWeight, newFavs, serverProfile] = await Promise.all([
-    env.DB.prepare('SELECT * FROM food_entries  WHERE token=? AND updated_at>?').bind(token, since).all(),
-    env.DB.prepare('SELECT * FROM weight_entries WHERE token=? AND updated_at>?').bind(token, since).all(),
-    env.DB.prepare('SELECT * FROM favourites    WHERE token=? AND updated_at>?').bind(token, since).all(),
-    env.DB.prepare('SELECT * FROM profile        WHERE token=?').bind(token).first<{ token: string; data: string; updated_at: string }>(),
+    env.calorie_tracker_sync.prepare('SELECT * FROM food_entries  WHERE token=? AND updated_at>?').bind(token, since).all(),
+    env.calorie_tracker_sync.prepare('SELECT * FROM weight_entries WHERE token=? AND updated_at>?').bind(token, since).all(),
+    env.calorie_tracker_sync.prepare('SELECT * FROM favourites    WHERE token=? AND updated_at>?').bind(token, since).all(),
+    env.calorie_tracker_sync.prepare('SELECT * FROM profile        WHERE token=?').bind(token).first<{ token: string; data: string; updated_at: string }>(),
   ]);
 
   const parsedProfile = serverProfile

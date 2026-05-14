@@ -4,8 +4,8 @@ compatibility_date = "2024-01-15"
 compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
-binding = "DB"
+binding = "calorie_tracker_sync"
 database_name = "calorie-tracker-sync"
-database_id = "YOUR_DATABASE_ID_HERE"
+database_id = "f2008307-ecca-4049-9c53-51c712fad36a"
 # Run `wrangler d1 create calorie-tracker-sync` to get your database_id
 # Run `wrangler d1 execute calorie-tracker-sync --file=schema.sql` to apply the schema

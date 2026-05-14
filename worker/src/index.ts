@@ -47,6 +47,7 @@ interface InsightRequest {
   carbs: number;
   fat: number;
   fiber: number;
+  salt: number;
   rda_protein: number;
   rda_carbs: number;
   rda_fat: number;
@@ -353,6 +354,7 @@ Today's intake:
 - Carbs: ${data.carbs}g / ${data.rda_carbs}g RDA (${pct(data.carbs, data.rda_carbs)}%)
 - Fat: ${data.fat}g / ${data.rda_fat}g RDA (${pct(data.fat, data.rda_fat)}%)
 - Fibre: ${data.fiber}g / ${data.rda_fiber}g RDA (${pct(data.fiber, data.rda_fiber)}%)
+- Salt: ${data.salt}g / 6g max (${pct(data.salt, 6)}%)
 
 Reply with ONLY this JSON and nothing else:
 {"insight": "2-3 sentences referencing real numbers", "mood": "great|good|caution"}

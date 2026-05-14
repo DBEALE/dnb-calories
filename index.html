@@ -662,7 +662,7 @@
                     </button>
                     <button class="action-btn" onclick="app.openQuickAdd()">
                         <span class="action-icon">⚡</span>
-                        <span>Quick Add</span>
+                        <span>Manual Entry</span>
                     </button>
                     <button class="action-btn" onclick="app.openFavourites()">
                         <span class="action-icon">⭐</span>
@@ -675,31 +675,6 @@
                     <div id="today-meals"></div>
                 </div>
 
-                <div class="card">
-                    <div class="card-title">Macros</div>
-                    <div class="macro-grid" id="today-macros">
-                        <div class="macro-item">
-                            <div class="macro-label">Protein</div>
-                            <div class="macro-value" id="macro-protein">0g</div>
-                        </div>
-                        <div class="macro-item">
-                            <div class="macro-label">Carbs</div>
-                            <div class="macro-value" id="macro-carbs">0g</div>
-                        </div>
-                        <div class="macro-item">
-                            <div class="macro-label">Fat</div>
-                            <div class="macro-value" id="macro-fat">0g</div>
-                        </div>
-                        <div class="macro-item">
-                            <div class="macro-label">Fibre</div>
-                            <div class="macro-value" id="macro-fibre">0g</div>
-                        </div>
-                        <div class="macro-item">
-                            <div class="macro-label">Salt</div>
-                            <div class="macro-value" id="macro-salt">0g</div>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="card">
                     <div class="card-title">Latest Weight</div>
@@ -960,7 +935,7 @@
     <div class="modal" id="modal-quick-add">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Log a Meal</h2>
+                <h2>Manual Entry</h2>
                 <button class="close-btn" onclick="app.closeModal('quick-add')">✕</button>
             </div>
             <div class="modal-body">
@@ -1271,7 +1246,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 12;
+        const APP_BUILD = 13;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -1644,12 +1619,6 @@
                     deficitCard.classList.add('warning');
                 }
 
-                // Macros
-                document.getElementById('macro-protein').textContent = Math.round(protein) + 'g';
-                document.getElementById('macro-carbs').textContent = Math.round(carbs) + 'g';
-                document.getElementById('macro-fat').textContent = Math.round(fat) + 'g';
-                document.getElementById('macro-fibre').textContent = Math.round(fiber) + 'g';
-                document.getElementById('macro-salt').textContent = (Math.round(salt * 10) / 10) + 'g';
 
                 // Meals
                 const mealAccents = {

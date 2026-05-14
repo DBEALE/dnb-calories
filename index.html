@@ -781,26 +781,33 @@
                 <!-- Calorie chart -->
                 <div class="card">
                     <div class="card-title" id="history-chart-title">This Week</div>
-                    <div class="chart-container" style="height: 220px;">
-                        <canvas id="history-chart"></canvas>
+                    <div id="history-chart-wrapper">
+                        <div class="chart-container" style="height: 220px;">
+                            <canvas id="history-chart"></canvas>
+                        </div>
+                    </div>
+                    <div id="history-chart-empty" style="display: none; text-align: center; padding: 32px 16px;">
+                        <div style="font-size: 40px; margin-bottom: 12px;">📊</div>
+                        <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;" id="history-empty-title">No meals logged this week</div>
+                        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">Head to the <strong>Log</strong> tab and start tracking your meals — your calorie history will appear here as you build up data.</div>
                     </div>
                 </div>
 
                 <!-- Macro breakdown -->
-                <div class="card">
+                <div class="card" id="history-macro-card">
                     <div class="card-title">Macro Breakdown</div>
-                    <div style="display: flex; align-items: center; gap: 20px;">
-                        <div style="flex-shrink: 0; width: 130px; height: 130px; position: relative;">
-                            <canvas id="history-macros-chart"></canvas>
-                            <div id="history-macro-centre" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;">
-                                <div style="font-size: 18px; font-weight: 800; color: var(--text-primary);"></div>
-                            </div>
-                        </div>
-                        <div style="flex: 1;" id="history-macro-stats">
-                            <p style="font-size: 12px; color: var(--text-secondary);">No macro data for this period.</p>
-                        </div>
+                    <div id="history-macro-empty" style="display: none; text-align: center; padding: 20px 16px;">
+                        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">Log meals via <strong>Scan Food Label</strong> to capture protein, carbs, fat, fibre and salt — your macro split will appear here.</div>
                     </div>
-                    <p id="history-macro-note" style="font-size: 11px; color: var(--text-tertiary); margin-top: 10px; display: none;">Macro data is only available for entries logged via label scan.</p>
+                    <div id="history-macro-data" style="display: none;">
+                        <div style="display: flex; align-items: center; gap: 20px;">
+                            <div style="flex-shrink: 0; width: 130px; height: 130px; position: relative;">
+                                <canvas id="history-macros-chart"></canvas>
+                            </div>
+                            <div style="flex: 1;" id="history-macro-stats"></div>
+                        </div>
+                        <p id="history-macro-note" style="font-size: 11px; color: var(--text-tertiary); margin-top: 10px; display: none;">Macro data is only available for entries logged via label scan.</p>
+                    </div>
                 </div>
 
                 <!-- Insight -->
@@ -1395,9 +1402,20 @@
     </div>
 
     <script>
-        const APP_BUILD = 19;
+        const APP_BUILD = 20;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'History tab empty states',
+                items: [
+                    'History tab now shows a friendly empty state when no meals have been logged for the selected period',
+                    'Chart area shows an icon and guidance to start logging from the Log tab',
+                    'KPI values show — instead of 0 when there is no data',
+                    'Macro breakdown shows context-aware guidance: different messages for no data vs data without macros',
+                    'Switching between Week / Month / Year each show their own appropriate empty state label',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Dark mode',
@@ -2363,34 +2381,64 @@
                 const periodDays = period === 'year' ? 365 : dailyTotals.length;
                 const deficit = (maintenance * periodDays) - total;
 
-                document.getElementById('history-total').textContent = total.toLocaleString();
-                document.getElementById('history-deficit').textContent = Math.round(deficit).toLocaleString();
-                document.getElementById('history-avg').textContent = avgDaily.toLocaleString();
-                document.getElementById('history-loss').textContent = (Math.max(0, deficit) / 7700).toFixed(2);
+                const periodLabels = { week: 'this week', month: 'this month', year: 'this year' };
+                const noData = daysWithData === 0;
 
-                this.createChart('history-chart', chartType, {
-                    labels,
-                    datasets: [
-                        { label: 'Calories', data: dailyTotals, backgroundColor: 'rgba(14,165,233,0.4)', borderColor: 'rgba(14,165,233,1)', borderWidth: 1, type: chartType === 'line' ? 'line' : 'bar', tension: 0.4, fill: chartType === 'line', order: 2 },
-                        ...mealDatasets
-                    ]
-                }, { legend: { display: mealDatasets.length > 0 } });
+                // KPIs
+                document.getElementById('history-total').textContent   = noData ? '—' : total.toLocaleString();
+                document.getElementById('history-deficit').textContent = noData ? '—' : Math.round(deficit).toLocaleString();
+                document.getElementById('history-avg').textContent     = noData ? '—' : avgDaily.toLocaleString();
+                document.getElementById('history-loss').textContent    = noData ? '—' : (Math.max(0, deficit) / 7700).toFixed(2);
 
-                this.renderMacrosChart({ protein: totalProtein, carbs: totalCarbs, fat: totalFat, hasData: macroEntryCount > 0 });
+                // Chart: show empty state or real chart
+                const chartWrapper = document.getElementById('history-chart-wrapper');
+                const chartEmpty   = document.getElementById('history-chart-empty');
+                if (noData) {
+                    chartWrapper.style.display = 'none';
+                    chartEmpty.style.display = 'block';
+                    document.getElementById('history-empty-title').textContent =
+                        `No meals logged ${periodLabels[period]}`;
+                    if (this.charts['history-chart']) {
+                        this.charts['history-chart'].destroy();
+                        delete this.charts['history-chart'];
+                    }
+                } else {
+                    chartWrapper.style.display = 'block';
+                    chartEmpty.style.display = 'none';
+                    this.createChart('history-chart', chartType, {
+                        labels,
+                        datasets: [
+                            { label: 'Calories', data: dailyTotals, backgroundColor: 'rgba(14,165,233,0.4)', borderColor: 'rgba(14,165,233,1)', borderWidth: 1, type: chartType === 'line' ? 'line' : 'bar', tension: 0.4, fill: chartType === 'line', order: 2 },
+                            ...mealDatasets
+                        ]
+                    }, { legend: { display: mealDatasets.length > 0 } });
+                }
+
+                // Macros
+                this.renderMacrosChart({ protein: totalProtein, carbs: totalCarbs, fat: totalFat, hasData: macroEntryCount > 0, noData });
                 this.renderHistoryInsight({ total, avgDaily, daysWithData, period, deficit, target, maintenance, dailyTotals });
             },
 
-            renderMacrosChart({ protein, carbs, fat, hasData }) {
-                const noteEl = document.getElementById('history-macro-note');
-                const statsEl = document.getElementById('history-macro-stats');
+            renderMacrosChart({ protein, carbs, fat, hasData, noData }) {
+                const noteEl   = document.getElementById('history-macro-note');
+                const statsEl  = document.getElementById('history-macro-stats');
+                const emptyEl  = document.getElementById('history-macro-empty');
+                const dataEl   = document.getElementById('history-macro-data');
 
-                if (!hasData || (protein === 0 && carbs === 0 && fat === 0)) {
+                const noMacros = noData || !hasData || (protein === 0 && carbs === 0 && fat === 0);
+                emptyEl.style.display = noMacros ? 'block' : 'none';
+                dataEl.style.display  = noMacros ? 'none'  : 'block';
+
+                if (noMacros) {
                     if (this.charts['history-macros-chart']) {
                         this.charts['history-macros-chart'].destroy();
                         delete this.charts['history-macros-chart'];
                     }
-                    statsEl.innerHTML = '<p style="font-size: 12px; color: var(--text-secondary);">No macro data for this period.</p>';
-                    noteEl.style.display = 'block';
+                    // Show different message depending on whether there's calorie data but no macros
+                    emptyEl.querySelector('div').innerHTML = noData
+                        ? 'Once you start logging meals, your macro breakdown will appear here.'
+                        : 'Macro data is available when meals are logged via <strong>Scan Food Label</strong> — tap the 📸 button on the Log screen.';
+                    noteEl.style.display = 'none';
                     return;
                 }
 

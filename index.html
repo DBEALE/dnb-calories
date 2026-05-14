@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Calorie Deficit Tracker</title>
     <script>if(localStorage.getItem('darkMode')==='true')document.body?document.body.classList.add('dark'):document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('dark'));</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
@@ -39,22 +39,25 @@
         }
 
         .app-container {
-            display: flex;
-            flex-direction: column;
             height: 100vh;
         }
 
         .content {
-            flex: 1;
+            position: fixed;
+            top: 64px;
+            left: 0;
+            right: 0;
+            bottom: 64px;
             overflow-y: auto;
             scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
         }
 
         .screen {
             display: none;
-            padding: 14px;
+            padding: 16px;
             padding-top: 20px;
-            padding-bottom: 90px;
+            padding-bottom: 32px;
             animation: fadeIn 0.25s ease-out;
         }
 
@@ -70,13 +73,16 @@
         /* Header */
         .header {
             padding: 14px 16px;
+            padding-top: max(14px, env(safe-area-inset-top, 14px));
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             border-bottom: none;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: sticky;
+            position: fixed;
             top: 0;
+            left: 0;
+            right: 0;
             z-index: 10;
             box-shadow: 0 2px 10px rgba(0,0,0,0.25);
         }
@@ -562,8 +568,10 @@
         /* Responsive */
         @media (min-width: 768px) {
             .content {
-                max-width: 600px;
-                margin: 0 auto;
+                left: 50%;
+                right: auto;
+                width: 600px;
+                margin-left: -300px;
             }
 
             .modal-content {
@@ -931,6 +939,27 @@
                         <label>Target Loss Rate (kg/week)</label>
                         <input type="number" id="settings-loss-rate" onchange="app.updateProfile()" step="0.1" min="0.25" max="1">
                     </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Macro Targets</div>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">Set your ideal macro split. Targets should add up to 100%.</p>
+                    <div class="upload-form-row">
+                        <label>Protein</label>
+                        <input type="number" id="settings-macro-protein" min="5" max="60" oninput="app.updateMacroSum()" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">%</span>
+                    </div>
+                    <div class="upload-form-row">
+                        <label>Carbs</label>
+                        <input type="number" id="settings-macro-carbs" min="10" max="80" oninput="app.updateMacroSum()" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">%</span>
+                    </div>
+                    <div class="upload-form-row">
+                        <label>Fat</label>
+                        <input type="number" id="settings-macro-fat" min="5" max="60" oninput="app.updateMacroSum()" onchange="app.updateProfile()">
+                        <span style="font-size: 14px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;">%</span>
+                    </div>
+                    <div id="macro-sum-indicator" style="text-align: center; font-size: 13px; font-weight: 600; margin-top: 8px; padding: 8px; border-radius: 8px; background: var(--bg-secondary);">Total: 100% ✓</div>
                 </div>
 
                 <div class="card">
@@ -1402,9 +1431,39 @@
     </div>
 
     <script>
-        const APP_BUILD = 21;
+        const APP_BUILD = 22;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'Configurable macro targets',
+                items: [
+                    'Settings now has a Macro Targets card — set your own Protein / Carbs / Fat percentage targets',
+                    'Defaults to 15% / 55% / 30% (standard dietary guidelines)',
+                    'Live sum indicator shows the total and turns red if the three values don\'t add up to 100%',
+                    'Targets feed directly into the Macro Balance pie chart legend on the Log screen',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Macro balance shown as pie chart',
+                items: [
+                    'Macro Balance section now uses a Chart.js doughnut chart instead of three separate rings',
+                    'Protein (amber), Carbs (blue) and Fat (purple) segments show the proportional split at a glance',
+                    'Legend alongside shows actual % vs recommended target % for each macro, colour coded by closeness to target',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Log screen ring layout redesign',
+                items: [
+                    'Rings now follow a clear visual hierarchy: one large calorie ring, three equal macro balance rings, five small RDA rings',
+                    'Calorie ring is larger and centred — consumed calories are now the most prominent number on the screen',
+                    'Macro balance rings (Protein / Carbs / Fat) are equal size and sit in their own labelled section',
+                    'RDA rings sit in a separate labelled section below for detailed nutritional tracking',
+                    'Each section is clearly separated with dividers and section headings',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Macro split ring on Log screen',
@@ -1871,6 +1930,10 @@
                 document.getElementById('settings-maintenance').value = this.profile.maintenance_kcal;
                 document.getElementById('settings-target').value = this.profile.target_kcal;
                 document.getElementById('settings-loss-rate').value = this.profile.target_loss_rate_kg_per_week;
+                document.getElementById('settings-macro-protein').value = this.profile.macro_protein_pct ?? 15;
+                document.getElementById('settings-macro-carbs').value   = this.profile.macro_carbs_pct   ?? 55;
+                document.getElementById('settings-macro-fat').value     = this.profile.macro_fat_pct     ?? 30;
+                this.updateMacroSum();
             },
 
             updateProfile() {
@@ -1885,9 +1948,25 @@
                     maintenance_kcal: parseInt(document.getElementById('settings-maintenance').value),
                     target_kcal: parseInt(document.getElementById('settings-target').value),
                     target_loss_rate_kg_per_week: parseFloat(document.getElementById('settings-loss-rate').value),
+                    macro_protein_pct: parseInt(document.getElementById('settings-macro-protein').value) || 15,
+                    macro_carbs_pct:   parseInt(document.getElementById('settings-macro-carbs').value)   || 55,
+                    macro_fat_pct:     parseInt(document.getElementById('settings-macro-fat').value)     || 30,
                     updated_at: new Date().toISOString()
                 };
                 this.saveProfile(profile);
+            },
+
+            updateMacroSum() {
+                const p = parseInt(document.getElementById('settings-macro-protein').value) || 0;
+                const c = parseInt(document.getElementById('settings-macro-carbs').value)   || 0;
+                const f = parseInt(document.getElementById('settings-macro-fat').value)     || 0;
+                const sum = p + c + f;
+                const el = document.getElementById('macro-sum-indicator');
+                if (!el) return;
+                const ok = sum === 100;
+                el.textContent = `Total: ${sum}% ${ok ? '✓' : '— should be 100%'}`;
+                el.style.color = ok ? '#10b981' : '#ef4444';
+                el.style.background = ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)';
             },
 
             switchScreen(screenName) {
@@ -2045,122 +2124,97 @@
 
             renderCalorieRing({ consumed, target, maintenance, deficit, protein, carbs, fat, fiber, salt }) {
                 const rda = this.calculateRDA();
+
+                // ── 1. Large centred calorie ring ──────────────────────
                 const pct = target > 0 ? consumed / target : 0;
                 const isOver = pct > 1;
                 const remaining = target - consumed;
-
-                // ── Calorie ring ──────────────────────────────────────
                 const ringColor = pct > 1 ? '#ef4444' : pct > 0.9 ? '#f97316' : pct > 0.75 ? '#f59e0b' : '#10b981';
-                const r1 = 70, sw1 = 13;
-                const c1 = +(2 * Math.PI * r1).toFixed(2);
-                const p1 = +(Math.min(pct, 1) * c1).toFixed(2);
-                const r2 = 54, sw2 = 10;
-                const c2 = +(2 * Math.PI * r2).toFixed(2);
-                const overflowPct = isOver ? pct - 1 : 0;
-                const p2 = +(Math.min(overflowPct, 1) * c2).toFixed(2);
+
+                const CR = 82, CSW = 16;
+                const CC = +(2 * Math.PI * CR).toFixed(2);
+                const CP = +(Math.min(pct, 1) * CC).toFixed(2);
+                const OR = 63, OSW = 12;
+                const OC = +(2 * Math.PI * OR).toFixed(2);
+                const OP = +(Math.min(isOver ? pct - 1 : 0, 1) * OC).toFixed(2);
 
                 const remainText = isOver
-                    ? `<span style="color:#ef4444;font-weight:700;font-size:11px;">${Math.abs(Math.round(remaining)).toLocaleString()} over</span>`
+                    ? `<span style="color:#ef4444;font-weight:700;">${Math.abs(Math.round(remaining)).toLocaleString()} kcal over</span>`
                     : remaining > 0
-                        ? `<span style="color:#10b981;font-weight:700;font-size:11px;">${Math.round(remaining).toLocaleString()} left</span>`
-                        : `<span style="color:#f59e0b;font-weight:700;font-size:11px;">On target</span>`;
+                        ? `<span style="color:#10b981;font-weight:700;">${Math.round(remaining).toLocaleString()} kcal left</span>`
+                        : `<span style="color:#f59e0b;font-weight:700;">Target reached</span>`;
 
-                const calorieSVG = `
-                    <div style="position:relative;width:100%;padding-top:100%;">
-                        <svg viewBox="0 0 180 180" style="position:absolute;inset:0;width:100%;height:100%;">
-                            <circle cx="90" cy="90" r="${r1}" fill="none" stroke="var(--bg-secondary)" stroke-width="${sw1}"/>
-                            <circle cx="90" cy="90" r="${r1}" fill="none" stroke="${ringColor}" stroke-width="${sw1}"
-                                stroke-dasharray="${p1} ${c1}" stroke-linecap="round" transform="rotate(-90 90 90)"/>
+                const deficitColor = deficit > 0 ? '#10b981' : '#f59e0b';
+                const deficitSign = deficit > 0 ? '▾' : '▴';
+
+                const calRing = `
+                    <div style="position:relative;width:210px;height:210px;margin:0 auto 4px;">
+                        <svg viewBox="0 0 210 210" style="width:210px;height:210px;">
+                            <circle cx="105" cy="105" r="${CR}" fill="none" stroke="var(--bg-secondary)" stroke-width="${CSW}"/>
+                            <circle id="cal-ring-arc" cx="105" cy="105" r="${CR}" fill="none" stroke="${ringColor}" stroke-width="${CSW}"
+                                stroke-dasharray="0 ${CC}" stroke-linecap="round" transform="rotate(-90 105 105)"
+                                style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1);"/>
                             ${isOver ? `
-                            <circle cx="90" cy="90" r="${r2}" fill="none" stroke="rgba(239,68,68,0.18)" stroke-width="${sw2}"/>
-                            <circle cx="90" cy="90" r="${r2}" fill="none" stroke="#ef4444" stroke-width="${sw2}"
-                                stroke-dasharray="${p2} ${c2}" stroke-linecap="round" transform="rotate(-90 90 90)"/>` : ''}
+                            <circle cx="105" cy="105" r="${OR}" fill="none" stroke="rgba(239,68,68,0.15)" stroke-width="${OSW}"/>
+                            <circle id="cal-ring-overflow" cx="105" cy="105" r="${OR}" fill="none" stroke="#ef4444" stroke-width="${OSW}"
+                                stroke-dasharray="0 ${OC}" stroke-linecap="round" transform="rotate(-90 105 105)"
+                                style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1) 0.3s;"/>` : ''}
                         </svg>
-                        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:8px;">
-                            <div style="font-size:26px;font-weight:800;color:var(--text-primary);letter-spacing:-1px;line-height:1;">${consumed.toLocaleString()}</div>
-                            <div style="font-size:9px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.4px;margin-top:2px;">OF ${target.toLocaleString()} KCAL</div>
-                            <div style="margin-top:5px;">${remainText}</div>
+                        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;">
+                            <div style="font-size:42px;font-weight:800;color:var(--text-primary);letter-spacing:-2px;line-height:1;">${consumed.toLocaleString()}</div>
+                            <div style="font-size:11px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.5px;margin-top:4px;">OF ${target.toLocaleString()} KCAL</div>
+                            <div style="margin-top:8px;font-size:13px;">${remainText}</div>
                         </div>
+                    </div>
+                    <div style="text-align:center;font-size:12px;font-weight:600;color:${deficitColor};margin-bottom:4px;">
+                        ${deficitSign} ${Math.abs(Math.round(deficit)).toLocaleString()} kcal vs maintenance
                     </div>`;
 
-                // ── Macro split ring ──────────────────────────────────
-                const TARGETS = { p: 15, c: 55, f: 30 }; // recommended %
+                // ── 2. Macro balance — 3 equal rings ──────────────────
                 const pKcal = protein * 4, cKcal = carbs * 4, fKcal = fat * 9;
                 const totalMacroKcal = pKcal + cKcal + fKcal;
                 const hasMacros = totalMacroKcal > 0;
-
+                const TARGETS = {
+                    p: this.profile?.macro_protein_pct ?? 15,
+                    c: this.profile?.macro_carbs_pct   ?? 55,
+                    f: this.profile?.macro_fat_pct     ?? 30,
+                };
                 const actualP = hasMacros ? Math.round(pKcal / totalMacroKcal * 100) : 0;
                 const actualC = hasMacros ? Math.round(cKcal / totalMacroKcal * 100) : 0;
                 const actualF = hasMacros ? Math.round(fKcal / totalMacroKcal * 100) : 0;
 
-                // SVG arc path helper
-                const toRad = d => d * Math.PI / 180;
-                const arcPath = (cx, cy, r, startDeg, endDeg) => {
-                    const s = { x: cx + r * Math.cos(toRad(startDeg)), y: cy + r * Math.sin(toRad(startDeg)) };
-                    const e = { x: cx + r * Math.cos(toRad(endDeg)),   y: cy + r * Math.sin(toRad(endDeg)) };
-                    const large = (endDeg - startDeg) > 180 ? 1 : 0;
-                    return `M ${s.x.toFixed(1)} ${s.y.toFixed(1)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(1)} ${e.y.toFixed(1)}`;
-                };
-
-                let macroSVG;
-                if (!hasMacros) {
-                    macroSVG = `<svg viewBox="0 0 130 130" style="position:absolute;inset:0;width:100%;height:100%;">
-                        <circle cx="65" cy="65" r="48" fill="none" stroke="var(--bg-secondary)" stroke-width="12"/>
-                    </svg>`;
-                } else {
-                    const segments = [
-                        { pct: actualP, color: '#f59e0b' }, // protein
-                        { pct: actualC, color: '#0ea5e9' }, // carbs
-                        { pct: actualF, color: '#8b5cf6' }, // fat
-                    ];
-                    const gap = 3, cx = 65, cy = 65, r = 48, sw = 12;
-                    let angle = -90;
-                    const arcs = segments.map(s => {
-                        const span = s.pct / 100 * 360;
-                        const path = span > gap * 2
-                            ? arcPath(cx, cy, r, angle + gap / 2, angle + span - gap / 2)
-                            : span > 1
-                                ? arcPath(cx, cy, r, angle, angle + span)
-                                : '';
-                        angle += span;
-                        return path ? `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="${sw}" stroke-linecap="round"/>` : '';
-                    }).join('');
-                    macroSVG = `<svg viewBox="0 0 130 130" style="position:absolute;inset:0;width:100%;height:100%;">
-                        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg-secondary)" stroke-width="${sw}"/>
-                        ${arcs}
-                    </svg>`;
-                }
-
-                const macroCompRow = (label, actual, target, color) => {
-                    const diff = actual - target;
+                const macroLegendRow = (label, actual, targetPct, color) => {
+                    const diff = actual - targetPct;
                     const fc = Math.abs(diff) <= 7 ? '#10b981' : Math.abs(diff) <= 15 ? '#f59e0b' : '#ef4444';
-                    return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;">
-                        <span style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;"></span>
-                        <span style="font-size:11px;font-weight:600;color:var(--text-secondary);flex:1;">${label}</span>
-                        <span style="font-size:12px;font-weight:800;color:${fc};">${hasMacros ? actual + '%' : '—'}</span>
-                        <span style="font-size:10px;color:var(--text-tertiary);">/ ${target}%</span>
-                    </div>`;
+                    return `
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+                            <span style="font-size:13px;font-weight:600;color:var(--text-primary);flex:1;">${label}</span>
+                            <span style="font-size:14px;font-weight:800;color:${fc};">${actual}%</span>
+                            <span style="font-size:11px;color:var(--text-tertiary);min-width:52px;text-align:right;">target ${targetPct}%</span>
+                        </div>`;
                 };
 
-                const macroRingEl = `
-                    <div style="display:flex;flex-direction:column;align-items:center;height:100%;">
-                        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:4px;">MACROS</div>
-                        <div style="position:relative;width:100%;padding-top:100%;flex-shrink:0;">${macroSVG}
-                            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
-                                ${hasMacros
-                                    ? `<div style="font-size:10px;font-weight:700;color:var(--text-primary);line-height:1.3;text-align:center;">${actualC}%<br><span style="color:var(--text-tertiary);font-size:9px;">carbs</span></div>`
-                                    : `<span style="font-size:14px;color:var(--text-tertiary);">—</span>`}
+                const macroSection = `
+                    <div style="border-top:1px solid var(--border-color);margin:12px 0 10px;padding-top:12px;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.7px;text-align:center;margin-bottom:12px;">MACRO BALANCE</div>
+                        ${hasMacros ? `
+                        <div style="display:flex;align-items:center;gap:16px;">
+                            <div style="flex-shrink:0;width:130px;height:130px;">
+                                <canvas id="log-macro-pie" style="width:130px;height:130px;"></canvas>
                             </div>
-                        </div>
-                        <div style="width:100%;margin-top:8px;">
-                            ${macroCompRow('Protein', actualP, TARGETS.p, '#f59e0b')}
-                            ${macroCompRow('Carbs',   actualC, TARGETS.c, '#0ea5e9')}
-                            ${macroCompRow('Fat',     actualF, TARGETS.f, '#8b5cf6')}
-                        </div>
-                        ${!hasMacros ? `<div style="font-size:10px;color:var(--text-tertiary);text-align:center;margin-top:2px;">Log via 📸 to see split</div>` : ''}
+                            <div style="flex:1;">
+                                ${macroLegendRow('Protein', actualP, TARGETS.p, '#f59e0b')}
+                                ${macroLegendRow('Carbs',   actualC, TARGETS.c, '#0ea5e9')}
+                                ${macroLegendRow('Fat',     actualF, TARGETS.f, '#8b5cf6')}
+                            </div>
+                        </div>` : `
+                        <p style="text-align:center;font-size:12px;color:var(--text-tertiary);padding:8px 0;">
+                            Scan a food label 📸 to see your macro split
+                        </p>`}
                     </div>`;
 
-                // ── Mini RDA rings ─────────────────────────────────────
+                // ── 3. RDA mini rings — 5 equal ────────────────────────
                 const miniRing = (label, g, rdaG, color, decimals = 0) => {
                     const mr = 22, msw = 6, sz = 54;
                     const mc = +(2 * Math.PI * mr).toFixed(2);
@@ -2187,27 +2241,41 @@
                         </div>`;
                 };
 
-                const deficitSign = deficit > 0 ? '▾' : '▴';
-                const deficitColor = deficit > 0 ? '#10b981' : '#f59e0b';
-
-                const macroRdaRow = rda ? `
-                    <div style="display:flex;gap:4px;justify-content:space-around;padding-top:12px;border-top:1px solid var(--border-color);margin-top:4px;">
-                        ${miniRing('Protein', protein, rda.protein, '#f59e0b')}
-                        ${miniRing('Carbs',   carbs,   rda.carbs,   '#0ea5e9')}
-                        ${miniRing('Fat',     fat,     rda.fat,     '#8b5cf6')}
-                        ${miniRing('Fibre',   fiber,   rda.fiber,   '#10b981')}
-                        ${miniRing('Salt',    salt,    rda.salt,    '#06b6d4', 1)}
+                const rdaSection = rda ? `
+                    <div style="border-top:1px solid var(--border-color);margin-top:10px;padding-top:12px;">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.7px;text-align:center;margin-bottom:10px;">NUTRITION vs RDA</div>
+                        <div style="display:flex;gap:4px;justify-content:space-around;">
+                            ${miniRing('Protein', protein, rda.protein, '#f59e0b')}
+                            ${miniRing('Carbs',   carbs,   rda.carbs,   '#0ea5e9')}
+                            ${miniRing('Fat',     fat,     rda.fat,     '#8b5cf6')}
+                            ${miniRing('Fibre',   fiber,   rda.fiber,   '#10b981')}
+                            ${miniRing('Salt',    salt,    rda.salt,    '#06b6d4', 1)}
+                        </div>
                     </div>` : '';
 
-                document.getElementById('calorie-ring-container').innerHTML = `
-                    <div style="display:flex;gap:14px;align-items:flex-start;">
-                        <div style="flex:5;min-width:0;">${calorieSVG}</div>
-                        <div style="flex:4;min-width:0;">${macroRingEl}</div>
-                    </div>
-                    <div style="text-align:center;font-size:12px;font-weight:600;color:${deficitColor};margin:8px 0 2px;">
-                        ${deficitSign} ${Math.abs(Math.round(deficit)).toLocaleString()} kcal vs maintenance
-                    </div>
-                    ${macroRdaRow}`;
+                document.getElementById('calorie-ring-container').innerHTML =
+                    calRing + macroSection + rdaSection;
+
+                // Animate calorie ring after paint
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    const arc = document.getElementById('cal-ring-arc');
+                    if (arc) arc.setAttribute('stroke-dasharray', `${CP} ${CC}`);
+                    const overflow = document.getElementById('cal-ring-overflow');
+                    if (overflow) overflow.setAttribute('stroke-dasharray', `${OP} ${OC}`);
+                }));
+
+                if (hasMacros) {
+                    this.createChart('log-macro-pie', 'doughnut', {
+                        labels: ['Protein', 'Carbs', 'Fat'],
+                        datasets: [{
+                            data: [Math.round(pKcal), Math.round(cKcal), Math.round(fKcal)],
+                            backgroundColor: ['#f59e0b', '#0ea5e9', '#8b5cf6'],
+                            borderWidth: 3,
+                            borderColor: 'var(--bg-primary)',
+                            hoverOffset: 6,
+                        }]
+                    });
+                }
             },
 
             groupMealsByType(entries) {

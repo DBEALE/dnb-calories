@@ -1461,7 +1461,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 24;
+        const APP_BUILD = 25;
 
         const CHANGELOG = [
             {
@@ -2282,23 +2282,28 @@
 
                 const calRing = `
                     <div style="display:flex;gap:12px;align-items:stretch;margin-bottom:4px;">
-                        <!-- Calorie ring -->
-                        <div style="flex-shrink:0;position:relative;width:155px;height:155px;">
-                            <svg viewBox="0 0 210 210" style="width:155px;height:155px;">
-                                <circle cx="105" cy="105" r="${CR}" fill="none" stroke="var(--bg-secondary)" stroke-width="${CSW}"/>
-                                <circle id="cal-ring-arc" cx="105" cy="105" r="${CR}" fill="none" stroke="${ringColor}" stroke-width="${CSW}"
-                                    stroke-dasharray="0 ${CC}" stroke-linecap="round" transform="rotate(-90 105 105)"
-                                    style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1);"/>
-                                ${isOver ? `
-                                <circle cx="105" cy="105" r="${OR}" fill="none" stroke="rgba(239,68,68,0.15)" stroke-width="${OSW}"/>
-                                <circle id="cal-ring-overflow" cx="105" cy="105" r="${OR}" fill="none" stroke="#ef4444" stroke-width="${OSW}"
-                                    stroke-dasharray="0 ${OC}" stroke-linecap="round" transform="rotate(-90 105 105)"
-                                    style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1) 0.3s;"/>` : ''}
-                            </svg>
-                            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;">
-                                <div style="font-size:30px;font-weight:800;color:var(--text-primary);letter-spacing:-1.5px;line-height:1;">${consumed.toLocaleString()}</div>
-                                <div style="font-size:9px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.4px;margin-top:3px;">OF ${target.toLocaleString()} KCAL</div>
-                                <div style="margin-top:5px;font-size:11px;">${remainText}</div>
+                        <!-- Calorie ring + deficit line stacked -->
+                        <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;width:155px;">
+                            <div style="position:relative;width:155px;height:155px;">
+                                <svg viewBox="0 0 210 210" style="width:155px;height:155px;">
+                                    <circle cx="105" cy="105" r="${CR}" fill="none" stroke="var(--bg-secondary)" stroke-width="${CSW}"/>
+                                    <circle id="cal-ring-arc" cx="105" cy="105" r="${CR}" fill="none" stroke="${ringColor}" stroke-width="${CSW}"
+                                        stroke-dasharray="0 ${CC}" stroke-linecap="round" transform="rotate(-90 105 105)"
+                                        style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1);"/>
+                                    ${isOver ? `
+                                    <circle cx="105" cy="105" r="${OR}" fill="none" stroke="rgba(239,68,68,0.15)" stroke-width="${OSW}"/>
+                                    <circle id="cal-ring-overflow" cx="105" cy="105" r="${OR}" fill="none" stroke="#ef4444" stroke-width="${OSW}"
+                                        stroke-dasharray="0 ${OC}" stroke-linecap="round" transform="rotate(-90 105 105)"
+                                        style="transition:stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1) 0.3s;"/>` : ''}
+                                </svg>
+                                <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;">
+                                    <div style="font-size:30px;font-weight:800;color:var(--text-primary);letter-spacing:-1.5px;line-height:1;">${consumed.toLocaleString()}</div>
+                                    <div style="font-size:9px;color:var(--text-tertiary);font-weight:700;letter-spacing:0.4px;margin-top:3px;">OF ${target.toLocaleString()} KCAL</div>
+                                    <div style="margin-top:5px;font-size:11px;">${remainText}</div>
+                                </div>
+                            </div>
+                            <div style="font-size:11px;font-weight:600;color:${deficitColor};margin-top:6px;text-align:center;">
+                                ${deficitSign} ${Math.abs(Math.round(deficit)).toLocaleString()} kcal vs maint.
                             </div>
                         </div>
                         <!-- Status panel -->
@@ -2308,9 +2313,6 @@
                             ${statusRow('💊', 'Nutrition', nutSt)}
                             ${statusRow('⚖️', 'Weight',   wgtSt)}
                         </div>
-                    </div>
-                    <div style="text-align:center;font-size:12px;font-weight:600;color:${deficitColor};margin-bottom:4px;">
-                        ${deficitSign} ${Math.abs(Math.round(deficit)).toLocaleString()} kcal vs maintenance
                     </div>`;
 
                 // ── 2. Macro balance — 3 equal rings ──────────────────

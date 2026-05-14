@@ -34,6 +34,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+interface SyncRequest {
+  token: string;
+  since: string;
+  foodEntries: any[];
+  weightEntries: any[];
+  favourites: any[];
+  profile: any | null;
+}
+
+interface Env {
+  OPENROUTER_API_KEY: string;
+  DB: D1Database;
+}
+
 interface InsightRequest {
   sex: string;
   age: number;
@@ -55,7 +69,7 @@ interface InsightRequest {
 }
 
 export default {
-  async fetch(request: Request, env: any): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
@@ -66,6 +80,11 @@ export default {
 
     const url = new URL(request.url);
     const pathname = url.pathname;
+
+    // Sync endpoint — does not require OPENROUTER_API_KEY
+    if (pathname.endsWith('/api/sync')) {
+      return handleSync(request, env);
+    }
 
     const openRouterKey = env.OPENROUTER_API_KEY;
     if (!openRouterKey) {
@@ -135,6 +154,140 @@ export default {
     return new Response('Not found', { status: 404 });
   },
 };
+
+// ── Sync ─────────────────────────────────────────────────────────────────────
+
+async function handleSync(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) {
+    return new Response(JSON.stringify({ error: 'Sync not configured' }), {
+      status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  }
+
+  let body: SyncRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  }
+
+  const { token, since = '1970-01-01T00:00:00.000Z', foodEntries = [], weightEntries = [], favourites = [], profile } = body;
+  if (!token || typeof token !== 'string' || token.length < 8) {
+    return new Response(JSON.stringify({ error: 'Invalid token' }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  }
+
+  // Chunk helper — D1 batch limit is 100 statements
+  const chunk = <T>(arr: T[], n = 80): T[][] =>
+    arr.length === 0 ? [] : [arr.slice(0, n), ...chunk(arr.slice(n), n)];
+
+  // Upsert food entries
+  for (const batch of chunk(foodEntries)) {
+    await env.DB.batch(batch.map((e: any) =>
+      env.DB.prepare(`
+        INSERT INTO food_entries
+          (sync_id,token,date,time,meal_type,food_name,brand,serving_description,
+           calories,protein_g,carbs_g,fat_g,fibre_g,salt_g,sugar_g,
+           source_type,ocr_confidence,updated_at,deleted)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(sync_id) DO UPDATE SET
+          date=excluded.date, time=excluded.time, meal_type=excluded.meal_type,
+          food_name=excluded.food_name, brand=excluded.brand,
+          serving_description=excluded.serving_description, calories=excluded.calories,
+          protein_g=excluded.protein_g, carbs_g=excluded.carbs_g, fat_g=excluded.fat_g,
+          fibre_g=excluded.fibre_g, salt_g=excluded.salt_g, sugar_g=excluded.sugar_g,
+          source_type=excluded.source_type, ocr_confidence=excluded.ocr_confidence,
+          updated_at=excluded.updated_at, deleted=excluded.deleted
+        WHERE excluded.updated_at > food_entries.updated_at
+      `).bind(
+        e.sync_id, token, e.date ?? null, e.time ?? null, e.meal_type ?? null,
+        e.food_name ?? null, e.brand ?? null, e.serving_description ?? null,
+        e.calories ?? null, e.protein_g ?? null, e.carbs_g ?? null, e.fat_g ?? null,
+        e.fibre_g ?? null, e.salt_g ?? null, e.sugar_g ?? null,
+        e.source_type ?? null, e.ocr_confidence ?? null,
+        e.updated_at, e.deleted ? 1 : 0,
+      )
+    ));
+  }
+
+  // Upsert weight entries
+  for (const batch of chunk(weightEntries)) {
+    await env.DB.batch(batch.map((e: any) =>
+      env.DB.prepare(`
+        INSERT INTO weight_entries (sync_id,token,date,time,weight_kg,is_morning,note,updated_at,deleted)
+        VALUES (?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(sync_id) DO UPDATE SET
+          date=excluded.date, time=excluded.time, weight_kg=excluded.weight_kg,
+          is_morning=excluded.is_morning, note=excluded.note,
+          updated_at=excluded.updated_at, deleted=excluded.deleted
+        WHERE excluded.updated_at > weight_entries.updated_at
+      `).bind(
+        e.sync_id, token, e.date ?? null, e.time ?? null, e.weight_kg ?? null,
+        e.is_morning ? 1 : 0, e.note ?? null, e.updated_at, e.deleted ? 1 : 0,
+      )
+    ));
+  }
+
+  // Upsert favourites
+  for (const batch of chunk(favourites)) {
+    await env.DB.batch(batch.map((e: any) =>
+      env.DB.prepare(`
+        INSERT INTO favourites
+          (sync_id,token,food_name,brand,serving_description,calories,
+           protein_g,carbs_g,fat_g,fibre_g,salt_g,meal_type,updated_at,deleted)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(sync_id) DO UPDATE SET
+          food_name=excluded.food_name, brand=excluded.brand,
+          serving_description=excluded.serving_description, calories=excluded.calories,
+          protein_g=excluded.protein_g, carbs_g=excluded.carbs_g, fat_g=excluded.fat_g,
+          fibre_g=excluded.fibre_g, salt_g=excluded.salt_g, meal_type=excluded.meal_type,
+          updated_at=excluded.updated_at, deleted=excluded.deleted
+        WHERE excluded.updated_at > favourites.updated_at
+      `).bind(
+        e.sync_id, token, e.food_name ?? null, e.brand ?? null,
+        e.serving_description ?? null, e.calories ?? null,
+        e.protein_g ?? null, e.carbs_g ?? null, e.fat_g ?? null,
+        e.fibre_g ?? null, e.salt_g ?? null, e.meal_type ?? null,
+        e.updated_at, e.deleted ? 1 : 0,
+      )
+    ));
+  }
+
+  // Upsert profile
+  if (profile && profile.updated_at) {
+    await env.DB.prepare(`
+      INSERT INTO profile (token, data, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(token) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
+      WHERE excluded.updated_at > profile.updated_at
+    `).bind(token, JSON.stringify(profile), profile.updated_at).run();
+  }
+
+  // Fetch records newer than since
+  const serverTime = new Date().toISOString();
+  const [newFood, newWeight, newFavs, serverProfile] = await Promise.all([
+    env.DB.prepare('SELECT * FROM food_entries  WHERE token=? AND updated_at>?').bind(token, since).all(),
+    env.DB.prepare('SELECT * FROM weight_entries WHERE token=? AND updated_at>?').bind(token, since).all(),
+    env.DB.prepare('SELECT * FROM favourites    WHERE token=? AND updated_at>?').bind(token, since).all(),
+    env.DB.prepare('SELECT * FROM profile        WHERE token=?').bind(token).first<{ token: string; data: string; updated_at: string }>(),
+  ]);
+
+  const parsedProfile = serverProfile
+    ? { ...JSON.parse(serverProfile.data), updated_at: serverProfile.updated_at }
+    : null;
+
+  return new Response(JSON.stringify({
+    foodEntries:   newFood.results,
+    weightEntries: newWeight.results,
+    favourites:    newFavs.results,
+    profile:       parsedProfile,
+    serverTime,
+  }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+}
+
+// ── AI endpoints ──────────────────────────────────────────────────────────────
 
 async function callOpenRouter(
   imageBase64: string,

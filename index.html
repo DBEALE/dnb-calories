@@ -1024,6 +1024,18 @@
                     <input type="file" id="import-file" accept=".json" style="display: none;" onchange="app.processImport(event)">
                 </div>
 
+                <div class="card">
+                    <div class="card-title">Sync</div>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">Your data syncs automatically when online. To use the same data on another device, copy your Sync Key and paste it into Settings → Sync on that device.</p>
+                    <div style="background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-family: monospace; font-size: 10px; color: var(--text-secondary); word-break: break-all;" id="sync-key-display"></div>
+                    <button class="btn btn-secondary" onclick="app.copySyncKey()" style="width: 100%; margin-bottom: 8px;">📋 Copy Sync Key</button>
+                    <button class="btn btn-secondary" onclick="app.importSyncKey()" style="width: 100%; margin-bottom: 12px;">🔑 Use Key from Another Device</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 12px; color: var(--text-secondary);">Status</span>
+                        <span id="sync-status" style="font-size: 12px; color: var(--text-tertiary);">Checking…</span>
+                    </div>
+                </div>
+
                 <div class="card" style="border: 1.5px solid rgba(239,68,68,0.3);">
                     <div class="card-title" style="color: var(--accent-danger);">Danger Zone</div>
                     <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5;">Permanently deletes all food logs, weight entries, favourites, insights, and your profile. This cannot be undone.</p>
@@ -1505,9 +1517,19 @@
     </div>
 
     <script>
-        const APP_BUILD = 31;
+        const APP_BUILD = 32;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'Offline-first sync',
+                items: [
+                    'Data is stored locally and syncs to the server automatically when online',
+                    'Works fully offline — sync catches up the moment connection is restored',
+                    'Sync Key in Settings lets you share data across multiple devices',
+                    'Last-write-wins conflict resolution; deletes are soft so no data is lost before sync',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Macro deviation charts everywhere',
@@ -1863,7 +1885,7 @@
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
-        const DB_VERSION = 3;
+        const DB_VERSION = 4;
         let db;
 
         function initDB() {
@@ -1896,6 +1918,19 @@
                     if (!database.objectStoreNames.contains('favourites')) {
                         database.createObjectStore('favourites', { keyPath: 'id', autoIncrement: true });
                     }
+                    // v4: add sync_id indexes to existing stores
+                    if (e.oldVersion < 4) {
+                        const addIdx = (storeName, unique = true) => {
+                            if (!database.objectStoreNames.contains(storeName)) return;
+                            const store = e.target.transaction.objectStore(storeName);
+                            if (!store.indexNames.contains('sync_id')) {
+                                store.createIndex('sync_id', 'sync_id', { unique });
+                            }
+                        };
+                        addIdx('foodEntries');
+                        addIdx('weightEntries');
+                        addIdx('favourites');
+                    }
                 };
             });
         }
@@ -1924,6 +1959,13 @@
                 this.updateDate();
                 this.refreshToday();
                 setInterval(() => this.updateDate(), 60000);
+                // Sync setup
+                const keyEl = document.getElementById('sync-key-display');
+                if (keyEl) keyEl.textContent = this.getSyncToken();
+                this.syncWithServer();
+                window.addEventListener('online',  () => this.syncWithServer());
+                window.addEventListener('offline', () => this.updateSyncStatus('offline'));
+                setInterval(() => this.syncWithServer(), 5 * 60 * 1000);
             },
 
             getCurrentDateString() {
@@ -2163,13 +2205,14 @@
             },
 
             saveProfile(profile) {
+                const profileWithMeta = { ...profile, updated_at: new Date().toISOString() };
                 return new Promise((resolve) => {
                     const transaction = db.transaction(['profile'], 'readwrite');
                     const store = transaction.objectStore('profile');
-                    store.put(profile);
+                    store.put(profileWithMeta);
                     
                     transaction.oncomplete = () => {
-                        this.profile = profile;
+                        this.profile = profileWithMeta;
                         this.populateSettings();
                         this.refreshAll();
                         resolve();
@@ -2375,7 +2418,7 @@
                     const store = transaction.objectStore('foodEntries');
                     const index = store.index('date');
                     const request = index.getAll(date);
-                    request.onsuccess = () => resolve(request.result);
+                    request.onsuccess = () => resolve(request.result.filter(e => !e.deleted));
                 });
             },
 
@@ -2384,7 +2427,7 @@
                     const transaction = db.transaction(['foodEntries'], 'readonly');
                     const store = transaction.objectStore('foodEntries');
                     const request = store.getAll();
-                    request.onsuccess = () => resolve(request.result);
+                    request.onsuccess = () => resolve(request.result.filter(e => !e.deleted));
                 });
             },
 
@@ -2395,7 +2438,7 @@
                     const index = store.index('date');
                     const range = IDBKeyRange.bound(startDate, endDate);
                     const request = index.getAll(range);
-                    request.onsuccess = () => resolve(request.result);
+                    request.onsuccess = () => resolve(request.result.filter(e => !e.deleted));
                 });
             },
 
@@ -2748,6 +2791,146 @@
 
             macroDiscrepancySVG(p, c, f) { return this.macroThumbSVG(p, c, f, 20); },
             macroItemSVG(p, c, f)        { return this.macroThumbSVG(p, c, f, 32); },
+
+            // ── Sync ─────────────────────────────────────────────────────
+
+            getSyncToken() {
+                let token = localStorage.getItem('syncToken');
+                if (!token) {
+                    token = crypto.randomUUID();
+                    localStorage.setItem('syncToken', token);
+                }
+                return token;
+            },
+
+            async syncWithServer() {
+                if (!navigator.onLine) { this.updateSyncStatus('offline'); return; }
+                const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
+                const token = this.getSyncToken();
+                this.updateSyncStatus('syncing');
+                try {
+                    const readAll = (s) => new Promise((res) => {
+                        const req = db.transaction([s], 'readonly').objectStore(s).getAll();
+                        req.onsuccess = () => res(req.result);
+                        req.onerror = () => res([]);
+                    });
+                    let [food, weight, favs] = await Promise.all([
+                        readAll('foodEntries'), readAll('weightEntries'), readAll('favourites'),
+                    ]);
+
+                    // Assign sync_ids to any legacy records and persist them
+                    const assignIds = async (records, storeName) => {
+                        const legacy = records.filter(r => !r.sync_id);
+                        if (!legacy.length) return;
+                        const tx = db.transaction([storeName], 'readwrite');
+                        const store = tx.objectStore(storeName);
+                        for (const r of legacy) {
+                            r.sync_id = crypto.randomUUID();
+                            r.updated_at = r.updated_at || r.created_at || new Date().toISOString();
+                            store.put(r);
+                        }
+                        await new Promise(r => { tx.oncomplete = r; });
+                    };
+                    await Promise.all([
+                        assignIds(food, 'foodEntries'),
+                        assignIds(weight, 'weightEntries'),
+                        assignIds(favs, 'favourites'),
+                    ]);
+                    // Re-read after ID assignment
+                    [food, weight, favs] = await Promise.all([
+                        readAll('foodEntries'), readAll('weightEntries'), readAll('favourites'),
+                    ]);
+
+                    const lastSync = localStorage.getItem('lastSync');
+                    const isDirty = (r) => !lastSync || (r.updated_at && r.updated_at > lastSync);
+                    const profileToSync = this.profile
+                        ? { ...this.profile, updated_at: this.profile.updated_at || new Date().toISOString() }
+                        : null;
+
+                    const resp = await fetch(`${WORKER}/api/sync`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            token,
+                            since: lastSync || '1970-01-01T00:00:00.000Z',
+                            foodEntries:   food.filter(isDirty),
+                            weightEntries: weight.filter(isDirty),
+                            favourites:    favs.filter(isDirty),
+                            profile: (!lastSync || (profileToSync?.updated_at > lastSync)) ? profileToSync : null,
+                        }),
+                    });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const data = await resp.json();
+
+                    await this.mergeSyncData(data, food, weight, favs);
+                    localStorage.setItem('lastSync', data.serverTime);
+                    this.updateSyncStatus('synced');
+                    const hasNew = data.foodEntries.length || data.weightEntries.length || data.favourites.length || data.profile;
+                    if (hasNew) this.refreshAll();
+                } catch (err) {
+                    console.warn('Sync failed:', err);
+                    this.updateSyncStatus('error');
+                }
+            },
+
+            async mergeSyncData(data, localFood, localWeight, localFavs) {
+                const merge = async (serverRecords, storeName, localRecords) => {
+                    if (!serverRecords?.length) return;
+                    const byId = Object.fromEntries(localRecords.filter(r => r.sync_id).map(r => [r.sync_id, r]));
+                    const tx = db.transaction([storeName], 'readwrite');
+                    const store = tx.objectStore(storeName);
+                    for (const srv of serverRecords) {
+                        const local = byId[srv.sync_id];
+                        if (local) {
+                            if (!local.updated_at || srv.updated_at > local.updated_at) {
+                                store.put({ ...local, ...srv, id: local.id, deleted: srv.deleted ? true : false });
+                            }
+                        } else if (!srv.deleted) {
+                            const { id: _id, ...withoutId } = srv;
+                            store.add(withoutId);
+                        }
+                    }
+                    await new Promise(r => { tx.oncomplete = r; tx.onerror = r; });
+                };
+                await merge(data.foodEntries,   'foodEntries',   localFood);
+                await merge(data.weightEntries, 'weightEntries', localWeight);
+                await merge(data.favourites,    'favourites',    localFavs);
+                if (data.profile && (!this.profile?.updated_at || data.profile.updated_at > this.profile.updated_at)) {
+                    await this.saveProfile({ ...data.profile, id: 'default' });
+                }
+            },
+
+            updateSyncStatus(status) {
+                const el = document.getElementById('sync-status');
+                if (!el) return;
+                const map = {
+                    syncing: { text: '↻ Syncing…',    color: 'var(--text-tertiary)' },
+                    synced:  { text: '✓ Synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), color: 'var(--accent-success)' },
+                    error:   { text: '⚠ Sync failed', color: 'var(--accent-warning)' },
+                    offline: { text: '○ Offline',      color: 'var(--text-tertiary)' },
+                };
+                const s = map[status] || map.offline;
+                el.textContent = s.text;
+                el.style.color = s.color;
+            },
+
+            copySyncKey() {
+                const key = this.getSyncToken();
+                navigator.clipboard.writeText(key).then(() => alert('Sync key copied to clipboard.')).catch(() => prompt('Copy this sync key:', key));
+            },
+
+            importSyncKey() {
+                const key = prompt('Paste the Sync Key from your other device:');
+                if (key && key.trim().length >= 8) {
+                    localStorage.setItem('syncToken', key.trim());
+                    localStorage.removeItem('lastSync');
+                    const el = document.getElementById('sync-key-display');
+                    if (el) el.textContent = key.trim();
+                    this.syncWithServer();
+                }
+            },
+
+            // ─────────────────────────────────────────────────────────────
 
             groupMealsByType(entries) {
                 const types = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'];
@@ -3386,6 +3569,8 @@
                     fibre_g: entry.fibre_g || null,
                     salt_g: entry.salt_g || null,
                     created_at: new Date().toISOString(),
+                    sync_id: crypto.randomUUID(),
+                    updated_at: new Date().toISOString(),
                 };
                 db.transaction(['favourites'], 'readwrite').objectStore('favourites').add(fav);
             },
@@ -3402,7 +3587,7 @@
             refreshFavouritesList() {
                 const req = db.transaction(['favourites'], 'readonly').objectStore('favourites').getAll();
                 req.onsuccess = () => {
-                    const favs = req.result;
+                    const favs = req.result.filter(f => !f.deleted);
                     if (favs.length === 0) {
                         document.getElementById('favourites-list').innerHTML =
                             '<p style="color: var(--text-secondary); font-size: 12px; text-align: center; padding: 24px 0;">No favourites yet.<br>Tick ⭐ Save as favourite when logging a meal.</p>';
@@ -3523,7 +3708,12 @@
             deleteFavourite(id) {
                 if (!confirm('Remove this favourite?')) return;
                 const tx = db.transaction(['favourites'], 'readwrite');
-                tx.objectStore('favourites').delete(id);
+                const store = tx.objectStore('favourites');
+                const req = store.get(id);
+                req.onsuccess = () => {
+                    const e = req.result;
+                    if (e) store.put({ ...e, deleted: true, sync_id: e.sync_id || crypto.randomUUID(), updated_at: new Date().toISOString() });
+                };
                 tx.oncomplete = () => this.refreshFavouritesList();
             },
 
@@ -3573,6 +3763,7 @@
                         fat_g: parseFloat(document.getElementById('edit-fat').value) || null,
                         fibre_g: parseFloat(document.getElementById('edit-fibre').value) || null,
                         salt_g:  parseFloat(document.getElementById('edit-salt').value)  || null,
+                        sync_id: existing.sync_id || crypto.randomUUID(),
                         updated_at: new Date().toISOString(),
                     };
                     const putReq = store.put(updated);
@@ -3638,7 +3829,12 @@
                 if (!this._editingId) return;
                 if (!confirm('Delete this entry?')) return;
                 const tx = db.transaction(['foodEntries'], 'readwrite');
-                tx.objectStore('foodEntries').delete(this._editingId);
+                const store = tx.objectStore('foodEntries');
+                const req = store.get(this._editingId);
+                req.onsuccess = () => {
+                    const e = req.result;
+                    if (e) store.put({ ...e, deleted: true, sync_id: e.sync_id || crypto.randomUUID(), updated_at: new Date().toISOString() });
+                };
                 tx.oncomplete = () => {
                     this._editingId = null;
                     this.closeModal('edit-entry');
@@ -3870,7 +4066,9 @@
                     salt_g:  parseFloat(document.getElementById('review-salt').value)  || null,
                     source_type: 'image',
                     ocr_confidence: this.currentReviewData.confidence,
-                    created_at: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    sync_id: crypto.randomUUID(),
+                    updated_at: new Date().toISOString(),
                 };
 
                 return new Promise((resolve) => {
@@ -3900,7 +4098,9 @@
                     food_name: document.getElementById('manual-name').value,
                     calories: parseInt(document.getElementById('manual-calories').value) || 0,
                     source_type: 'manual',
-                    created_at: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    sync_id: crypto.randomUUID(),
+                    updated_at: new Date().toISOString(),
                 };
 
                 return new Promise((resolve) => {
@@ -3931,7 +4131,9 @@
                     fibre_g: parseFloat(document.getElementById('quick-fibre').value) || null,
                     salt_g:  parseFloat(document.getElementById('quick-salt').value)  || null,
                     source_type: 'manual',
-                    created_at: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    sync_id: crypto.randomUUID(),
+                    updated_at: new Date().toISOString(),
                 };
 
                 return new Promise((resolve) => {
@@ -3967,7 +4169,9 @@
                     weight_kg: parseFloat(document.getElementById('weight-entry-value').value),
                     is_morning: document.getElementById('weight-entry-morning').checked,
                     note: document.getElementById('weight-entry-notes').value,
-                    created_at: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    sync_id: crypto.randomUUID(),
+                    updated_at: new Date().toISOString(),
                 };
                 if (this._editingWeightId) entry.id = this._editingWeightId;
 
@@ -3987,13 +4191,14 @@
 
             deleteFood(id) {
                 if (confirm('Delete this entry?')) {
-                    const transaction = db.transaction(['foodEntries'], 'readwrite');
-                    const store = transaction.objectStore('foodEntries');
-                    store.delete(id);
-                    
-                    transaction.oncomplete = () => {
-                        this.refreshAll();
+                    const tx = db.transaction(['foodEntries'], 'readwrite');
+                    const store = tx.objectStore('foodEntries');
+                    const req = store.get(id);
+                    req.onsuccess = () => {
+                        const e = req.result;
+                        if (e) store.put({ ...e, deleted: true, sync_id: e.sync_id || crypto.randomUUID(), updated_at: new Date().toISOString() });
                     };
+                    tx.oncomplete = () => this.refreshAll();
                 }
             },
 
@@ -4011,6 +4216,10 @@
                     this.weightChange7d = null;
                     this.lastMealType = null;
                     this.lastMealDate = null;
+                    // Reset sync state so a fresh token is generated on next use
+                    localStorage.removeItem('syncToken');
+                    localStorage.removeItem('lastSync');
+                    this.updateSyncStatus('offline');
                     // Show setup wizard
                     this.closeModal('edit-entry');
                     this.switchScreenDirect('today');

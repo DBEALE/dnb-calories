@@ -53,6 +53,7 @@
         .screen {
             display: none;
             padding: 14px;
+            padding-top: 20px;
             padding-bottom: 90px;
             animation: fadeIn 0.25s ease-out;
         }
@@ -77,7 +78,7 @@
             position: sticky;
             top: 0;
             z-index: 10;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
         }
 
         .header h1 {
@@ -934,8 +935,10 @@
 
                 <div class="card">
                     <div class="card-title">About</div>
-                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
-                        Calorie Deficit Tracker v1.0<br>
+                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.8;">
+                        Calorie Deficit Tracker<br>
+                        <span id="about-version" style="color: var(--text-tertiary);"></span><br>
+                        <span style="background: var(--bg-secondary); color: var(--text-secondary); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;">Free Version</span><br>
                         Data stored locally in your browser.<br>
                         No login required.
                     </p>
@@ -1392,7 +1395,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 18;
+        const APP_BUILD = 19;
 
         const CHANGELOG = [
             {
@@ -1640,6 +1643,7 @@
                 await initDB();
                 this.initDarkMode();
                 document.getElementById('app-version-display').textContent = 'b' + APP_BUILD;
+                document.getElementById('about-version').textContent = 'Build ' + APP_BUILD;
                 this.loadProfile();
                 this.selectedTodayDate = this.getCurrentDateString();
                 this.updateDate();

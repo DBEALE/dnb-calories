@@ -915,10 +915,13 @@
     <div class="modal" id="modal-upload">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Upload Nutrition Screenshot</h2>
+                <h2>Scan Food Label</h2>
                 <button class="close-btn" onclick="app.closeModal('upload')">✕</button>
             </div>
             <div class="modal-body">
+                <p style="font-size: 12px; color: var(--text-secondary); background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; line-height: 1.6;">
+                    Take a photo of a <strong>nutrition label</strong> or a <strong>meal</strong>. AI will extract the calories and macros automatically — you can review and edit before saving.
+                </p>
                 <div class="upload-form-row">
                     <label>Date</label>
                     <button onclick="app.shiftModalDate('upload-date', -1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
@@ -967,10 +970,13 @@
     <div class="modal" id="modal-quick-add">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Quick Add Calories</h2>
+                <h2>Log a Meal</h2>
                 <button class="close-btn" onclick="app.closeModal('quick-add')">✕</button>
             </div>
             <div class="modal-body">
+                <p style="font-size: 12px; color: var(--text-secondary); background: var(--bg-secondary); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; line-height: 1.6;">
+                    Manually log a meal or snack. Only <strong>calories</strong> is required — add macros for more accurate RDA tracking.
+                </p>
                 <div class="upload-form-row">
                     <label>Date</label>
                     <button onclick="app.shiftModalDate('quick-date', -1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
@@ -998,6 +1004,18 @@
                 <div class="upload-form-row">
                     <label>Protein</label>
                     <input type="number" id="quick-protein" step="0.1" placeholder="g (optional)">
+                </div>
+                <div class="upload-form-row">
+                    <label>Carbs</label>
+                    <input type="number" id="quick-carbs" step="0.1" placeholder="g (optional)">
+                </div>
+                <div class="upload-form-row">
+                    <label>Fat</label>
+                    <input type="number" id="quick-fat" step="0.1" placeholder="g (optional)">
+                </div>
+                <div class="upload-form-row">
+                    <label>Fibre</label>
+                    <input type="number" id="quick-fibre" step="0.1" placeholder="g (optional)">
                 </div>
                 <button class="btn btn-primary" onclick="app.saveQuickAdd()">Add to Log</button>
             </div>
@@ -1149,7 +1167,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 4;
+        const APP_BUILD = 5;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -1533,25 +1551,41 @@
                 document.getElementById('macro-fat').textContent = Math.round(fat) + 'g';
 
                 // Meals
+                const mealAccents = {
+                    Breakfast: { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
+                    Lunch:     { color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
+                    Dinner:    { color: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
+                    Snack:     { color: '#ec4899', bg: 'rgba(236,72,153,0.08)' },
+                    Drink:     { color: '#0ea5e9', bg: 'rgba(14,165,233,0.08)' },
+                };
                 const mealsHtml = this.groupMealsByType(entries).map(group => {
                     const groupTotal = group.entries.reduce((sum, e) => sum + (e.calories || 0), 0);
-                    return `
-                    <div style="margin-bottom: 12px;">
-                        <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                            <span>${group.type}</span>
-                            <span style="font-size: 13px; color: var(--text-primary);">${groupTotal} kcal</span>
-                        </div>
-                        ${group.entries.map(e => `
-                            <div class="meal-entry">
-                                <div class="meal-info">
-                                    <div class="meal-name">${e.food_name}</div>
-                                    <div class="meal-details">${e.brand || ''}</div>
-                                </div>
-                                <div class="meal-cal">${e.calories}</div>
+                    const accent = mealAccents[group.type] || { color: 'var(--text-secondary)', bg: 'var(--bg-secondary)' };
+                    const items = group.entries.map(e => {
+                        const macros = [
+                            e.protein_g ? `P ${Math.round(e.protein_g)}g` : '',
+                            e.carbs_g   ? `C ${Math.round(e.carbs_g)}g`   : '',
+                            e.fat_g     ? `F ${Math.round(e.fat_g)}g`     : '',
+                        ].filter(Boolean).join('  ·  ');
+                        const subtitle = [e.brand, e.serving_description].filter(Boolean).join(' · ');
+                        return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color);">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${e.food_name}</div>
+                                ${subtitle ? `<div style="font-size: 11px; color: var(--text-tertiary); margin-top: 1px;">${subtitle}</div>` : ''}
+                                ${macros ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; letter-spacing: 0.2px;">${macros}</div>` : ''}
                             </div>
-                        `).join('')}
-                    </div>
-                    `;
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-left: 12px; flex-shrink: 0;">${e.calories}<span style="font-size: 10px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px;">kcal</span></div>
+                        </div>`;
+                    }).join('');
+                    return `
+                    <div style="border-left: 3px solid ${accent.color}; background: ${accent.bg}; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: ${accent.color};">${group.type}</span>
+                            <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${groupTotal} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 10px;">kcal</span></span>
+                        </div>
+                        ${items}
+                    </div>`;
                 }).join('');
                 document.getElementById('today-meals').innerHTML = mealsHtml || '<p style="color: var(--text-secondary); font-size: 12px;">No meals logged yet</p>';
 
@@ -2137,6 +2171,10 @@
                         <label>Fat</label>
                         <input type="number" id="review-fat" value="${data.fat_g || ''}" step="0.1" placeholder="g">
                     </div>
+                    <div class="upload-form-row">
+                        <label>Fibre</label>
+                        <input type="number" id="review-fibre" value="${data.fibre_g || ''}" step="0.1" placeholder="g">
+                    </div>
                 `;
                 
                 document.getElementById('review-fields').innerHTML = fieldsHtml;
@@ -2161,6 +2199,7 @@
                     protein_g: parseFloat(document.getElementById('review-protein').value) || null,
                     carbs_g: parseFloat(document.getElementById('review-carbs').value) || null,
                     fat_g: parseFloat(document.getElementById('review-fat').value) || null,
+                    fibre_g: parseFloat(document.getElementById('review-fibre').value) || null,
                     source_type: 'image',
                     ocr_confidence: this.currentReviewData.confidence,
                     created_at: new Date().toISOString()
@@ -2215,6 +2254,9 @@
                     food_name: document.getElementById('quick-name').value,
                     calories: parseInt(document.getElementById('quick-calories').value) || 0,
                     protein_g: parseFloat(document.getElementById('quick-protein').value) || null,
+                    carbs_g: parseFloat(document.getElementById('quick-carbs').value) || null,
+                    fat_g: parseFloat(document.getElementById('quick-fat').value) || null,
+                    fibre_g: parseFloat(document.getElementById('quick-fibre').value) || null,
                     source_type: 'manual',
                     created_at: new Date().toISOString()
                 };
@@ -2230,6 +2272,9 @@
                         document.getElementById('quick-name').value = '';
                         document.getElementById('quick-calories').value = '';
                         document.getElementById('quick-protein').value = '';
+                        document.getElementById('quick-carbs').value = '';
+                        document.getElementById('quick-fat').value = '';
+                        document.getElementById('quick-fibre').value = '';
                         this.closeModal('quick-add');
                         this.refreshAll();
                         resolve();

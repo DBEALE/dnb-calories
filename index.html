@@ -1074,6 +1074,17 @@
                 <span class="nav-icon">✨</span>
                 <span>What's New</span>
             </button>
+            <button class="nav-btn" id="admin-nav-btn" onclick="app.switchScreen('admin')" style="display:none;">
+                <span class="nav-icon">🛠️</span>
+                <span>Admin</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Admin screen (injected into nav after unlock) -->
+    <div class="screen" id="screen-admin">
+        <div id="admin-body" style="font-size:13px;">
+            <p style="color:var(--text-tertiary);text-align:center;padding:40px 0;">Loading…</p>
         </div>
     </div>
 
@@ -1531,7 +1542,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 36;
+        const APP_BUILD = 37;
 
         const CHANGELOG = [
             {
@@ -2417,13 +2428,14 @@
                 document.getElementById('header-log-nav').style.display = isLog ? 'flex' : 'none';
                 document.getElementById('header-title-wrap').style.display = isLog ? 'none' : 'block';
                 if (!isLog) {
-                    const titles = { history: 'History', weight: 'Weight', settings: 'Settings', changes: 'What\'s New' };
+                    const titles = { history: 'History', weight: 'Weight', settings: 'Settings', changes: 'What\'s New', admin: '🛠️ Admin' };
                     document.getElementById('header-title').textContent = titles[screenName] || screenName;
                 }
 
                 if (screenName === 'history') this.refreshHistory();
                 if (screenName === 'weight') this.refreshWeight();
                 if (screenName === 'changes') this.renderChangelog();
+                if (screenName === 'admin') this.loadAdminScreen();
             },
 
             async refreshAll() {
@@ -2823,14 +2835,15 @@
                 this._adminTapTimer = setTimeout(() => { this._adminTaps = 0; }, 2000);
                 if (this._adminTaps >= 5) {
                     this._adminTaps = 0;
-                    this.openAdmin();
+                    const btn = document.getElementById('admin-nav-btn');
+                    if (btn) btn.style.display = '';
+                    this.switchScreen('admin');
                 }
             },
 
-            async openAdmin() {
+            async loadAdminScreen() {
                 const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
-                this.openModal('admin');
-                document.getElementById('admin-body').innerHTML = '<p style="color:var(--text-tertiary);text-align:center;padding:24px 0;">Loading…</p>';
+                document.getElementById('admin-body').innerHTML = '<p style="color:var(--text-tertiary);text-align:center;padding:40px 0;">Loading…</p>';
                 try {
                     const resp = await fetch(`${WORKER}/api/admin`, {
                         method: 'POST',
@@ -2842,46 +2855,59 @@
                         return;
                     }
                     const d = await resp.json();
-                    const endpointLabel = e => ({ 'extract-nutrition': '📸 Scan', 'daily-insight': '💡 Insight', 'calorie-target': '🎯 Cal Target' }[e] || e);
-                    const usageTable = (rows) => rows.length === 0 ? '<span style="color:var(--text-tertiary)">None</span>' :
-                        rows.map(r => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color);">
-                            <span>${endpointLabel(r.endpoint)}</span><strong>${r.n}</strong></div>`).join('');
+                    const epLabel = e => ({ 'extract-nutrition': '📸 Scan', 'daily-insight': '💡 Insight', 'calorie-target': '🎯 Cal Target' }[e] || e);
+                    const shortModel = m => (m || '—').replace('deepseek/', '').replace('openai/', '').replace(':free', '').replace('google/', '');
+                    const usageTable = (rows) => {
+                        if (!rows.length) return '<p style="color:var(--text-tertiary);font-size:12px;">None</p>';
+                        const grouped = {};
+                        rows.forEach(r => { if (!grouped[r.endpoint]) grouped[r.endpoint] = []; grouped[r.endpoint].push(r); });
+                        return Object.entries(grouped).map(([ep, items]) => `
+                            <div style="margin-bottom:10px;">
+                                <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">${epLabel(ep)}</div>
+                                ${items.map(r => `
+                                <div style="display:flex;justify-content:space-between;padding:3px 8px;border-radius:6px;background:var(--bg-secondary);margin-bottom:2px;font-size:11px;">
+                                    <span style="color:var(--text-secondary);">${shortModel(r.model)}</span>
+                                    <strong>${r.n}</strong>
+                                </div>`).join('')}
+                            </div>`).join('');
+                    };
                     document.getElementById('admin-body').innerHTML = `
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
                             <div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;">
                                 <div style="font-size:28px;font-weight:800;color:var(--text-primary);">${d.totalUsers}</div>
-                                <div style="font-size:11px;color:var(--text-tertiary);">Total users</div>
+                                <div style="font-size:11px;color:var(--text-tertiary);">Users</div>
                             </div>
                             ${d.records.map(r => `
                             <div style="background:var(--bg-secondary);border-radius:10px;padding:12px;text-align:center;">
                                 <div style="font-size:28px;font-weight:800;color:var(--text-primary);">${r.n}</div>
-                                <div style="font-size:11px;color:var(--text-tertiary);">${r.store} entries</div>
+                                <div style="font-size:11px;color:var(--text-tertiary);">${r.store}</div>
                             </div>`).join('')}
                         </div>
-                        <div style="margin-bottom:16px;">
-                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">AI CALLS — TODAY</div>
+                        <div class="card" style="margin-bottom:10px;">
+                            <div class="card-title" style="font-size:11px;">AI CALLS — TODAY</div>
                             ${usageTable(d.usageToday)}
                         </div>
-                        <div style="margin-bottom:16px;">
-                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">AI CALLS — THIS WEEK</div>
+                        <div class="card" style="margin-bottom:10px;">
+                            <div class="card-title" style="font-size:11px;">AI CALLS — THIS WEEK</div>
                             ${usageTable(d.usageWeek)}
                         </div>
-                        <div style="margin-bottom:16px;">
-                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">AI CALLS — THIS MONTH</div>
+                        <div class="card" style="margin-bottom:10px;">
+                            <div class="card-title" style="font-size:11px;">AI CALLS — THIS MONTH</div>
                             ${usageTable(d.usageMonth)}
                         </div>
-                        <div>
-                            <div style="font-size:11px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.6px;margin-bottom:8px;">RECENT ACTIVITY</div>
+                        <div class="card">
+                            <div class="card-title" style="font-size:11px;">RECENT ACTIVITY</div>
                             ${d.recent.map(r => `
-                            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:12px;">
-                                <span style="color:var(--text-tertiary);font-family:monospace;">${r.user}…</span>
-                                <span>${endpointLabel(r.endpoint)}</span>
-                                <span style="color:${r.success ? 'var(--accent-success)' : 'var(--accent-danger)'};">${r.success ? '✓' : '✗'}</span>
-                                <span style="color:var(--text-tertiary);font-size:11px;">${r.ts.slice(11,16)}</span>
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:11px;">
+                                <span style="color:var(--text-tertiary);font-family:monospace;flex-shrink:0;">${r.user}…</span>
+                                <span style="flex:1;text-align:center;">${epLabel(r.endpoint)}</span>
+                                <span style="color:var(--text-tertiary);flex-shrink:0;">${shortModel(r.model)}</span>
+                                <span style="color:${r.success ? 'var(--accent-success)' : 'var(--accent-danger)'};margin-left:8px;flex-shrink:0;">${r.success ? '✓' : '✗'}</span>
+                                <span style="color:var(--text-tertiary);margin-left:8px;flex-shrink:0;">${r.ts.slice(11,16)}</span>
                             </div>`).join('')}
                         </div>`;
                 } catch (e) {
-                    document.getElementById('admin-body').innerHTML = '<p style="color:var(--accent-danger);text-align:center;padding:24px 0;">Failed to load.</p>';
+                    document.getElementById('admin-body').innerHTML = '<p style="color:var(--accent-danger);text-align:center;padding:40px 0;">Failed to load.</p>';
                 }
             },
 

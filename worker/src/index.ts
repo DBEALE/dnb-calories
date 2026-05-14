@@ -70,7 +70,7 @@ interface InsightRequest {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
@@ -124,7 +124,7 @@ export default {
           { status: 500, headers: corsHeaders }
         );
       } finally {
-        logUsage(env, token, 'extract-nutrition', 'openai/gpt-4o-mini', success);
+        logUsage(ctx, env, token, 'extract-nutrition', 'openai/gpt-4o-mini', success);
       }
     }
 
@@ -147,7 +147,7 @@ export default {
           { status: 500, headers: corsHeaders }
         );
       } finally {
-        logUsage(env, token, 'daily-insight', 'deepseek/deepseek-v4-flash:free', success);
+        logUsage(ctx, env, token, 'daily-insight', 'deepseek/deepseek-v4-flash:free', success);
       }
     }
 
@@ -170,7 +170,7 @@ export default {
           { status: 500, headers: corsHeaders }
         );
       } finally {
-        logUsage(env, token, 'calorie-target', 'deepseek/deepseek-v4-flash:free', success);
+        logUsage(ctx, env, token, 'calorie-target', 'deepseek/deepseek-v4-flash:free', success);
       }
     }
 
@@ -190,9 +190,9 @@ async function handleAdmin(request: Request, env: Env): Promise<Response> {
 
   const db = env.calorie_tracker_sync;
   const [usageToday, usageWeek, usageMonth, users, records, recent] = await Promise.all([
-    db.prepare(`SELECT endpoint, COUNT(*) as n FROM usage WHERE ts >= date('now') GROUP BY endpoint`).all(),
-    db.prepare(`SELECT endpoint, COUNT(*) as n FROM usage WHERE ts >= date('now', '-7 days') GROUP BY endpoint`).all(),
-    db.prepare(`SELECT endpoint, COUNT(*) as n FROM usage WHERE ts >= date('now', 'start of month') GROUP BY endpoint`).all(),
+    db.prepare(`SELECT endpoint, model, COUNT(*) as n FROM usage WHERE ts >= date('now') GROUP BY endpoint, model ORDER BY n DESC`).all(),
+    db.prepare(`SELECT endpoint, model, COUNT(*) as n FROM usage WHERE ts >= date('now', '-7 days') GROUP BY endpoint, model ORDER BY n DESC`).all(),
+    db.prepare(`SELECT endpoint, model, COUNT(*) as n FROM usage WHERE ts >= date('now', 'start of month') GROUP BY endpoint, model ORDER BY n DESC`).all(),
     db.prepare(`SELECT COUNT(DISTINCT token) as n FROM usage`).first<{ n: number }>(),
     db.prepare(`
       SELECT 'food' as store, COUNT(*) as n FROM food_entries WHERE deleted=0
@@ -215,14 +215,15 @@ async function handleAdmin(request: Request, env: Env): Promise<Response> {
 
 // ── Usage logging ────────────────────────────────────────────────────────────
 
-function logUsage(env: Env, token: string, endpoint: string, model: string, success: boolean): void {
+function logUsage(ctx: ExecutionContext, env: Env, token: string, endpoint: string, model: string, success: boolean): void {
   if (!env.calorie_tracker_sync || !token) return;
-  // Fire-and-forget — don't block the response
-  env.calorie_tracker_sync
-    .prepare('INSERT INTO usage (token, endpoint, model, success, ts) VALUES (?, ?, ?, ?, ?)')
-    .bind(token, endpoint, model, success ? 1 : 0, new Date().toISOString())
-    .run()
-    .catch(() => {});
+  ctx.waitUntil(
+    env.calorie_tracker_sync
+      .prepare('INSERT INTO usage (token, endpoint, model, success, ts) VALUES (?, ?, ?, ?, ?)')
+      .bind(token, endpoint, model, success ? 1 : 0, new Date().toISOString())
+      .run()
+      .catch(() => {})
+  );
 }
 
 // ── Sync ─────────────────────────────────────────────────────────────────────

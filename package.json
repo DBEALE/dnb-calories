@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "deploy": "wrangler deploy --config worker/wrangler.toml",
+    "dev": "wrangler dev --config worker/wrangler.toml"
+  }
+}

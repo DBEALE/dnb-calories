@@ -6,7 +6,9 @@
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Admin\\\\Documents\\\\vsCode\\\\git\\\\dnb-calories\\\\worker\" | Where-Object { $_.Name -ne \"node_modules\" } | Format-Table Name, PSIsContainer)",
       "Bash(chmod +x *)",
       "Bash(npx wrangler *)",
-      "WebFetch(domain:openrouter.ai)"
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(wrangler deploy *)",
+      "Bash(wrangler d1 *)"
     ]
   }
 }

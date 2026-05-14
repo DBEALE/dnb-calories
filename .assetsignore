@@ -1,0 +1,10 @@
+node_modules/
+worker/
+.claude/
+.wrangler/
+.vscode/
+*.md
+*.jsonc
+*.json
+.gitignore
+.assetsignore

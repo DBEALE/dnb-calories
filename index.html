@@ -620,9 +620,11 @@
         <div class="content">
             <!-- Today Screen -->
             <div class="screen active" id="screen-today">
-                <label for="today-date-filter" class="date-filter-label">View date</label>
-                <input type="date" id="today-date-filter" class="date-filter" aria-label="Select date to view" aria-describedby="today-date-help" onchange="app.setViewDate(this.value)">
-                <div id="today-date-help" class="date-filter-help">Tip: use arrow keys to navigate dates in the picker.</div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <button onclick="app.shiftViewDate(-1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
+                    <input type="date" id="today-date-filter" style="flex: 1;" aria-label="Select date to view" onchange="app.setViewDate(this.value)">
+                    <button onclick="app.shiftViewDate(1)" id="today-date-next" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">›</button>
+                </div>
 
                 <div class="kpi-grid">
                     <div class="kpi-card">
@@ -683,6 +685,19 @@
                 <div class="card">
                     <div class="card-title">Latest Weight</div>
                     <div id="today-weight" style="font-size: 18px; font-weight: 600;">No entry yet</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Nutrition vs RDA</div>
+                    <div id="today-rda"><p style="color: var(--text-secondary); font-size: 12px;">No meals logged yet</p></div>
+                </div>
+
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div class="card-title" style="margin: 0;">AI Insight</div>
+                        <button onclick="app.fetchInsight(true)" style="background: none; border: none; cursor: pointer; font-size: 12px; color: var(--accent-info); font-weight: 600; padding: 0; display: flex; align-items: center; gap: 4px;">↻ Refresh</button>
+                    </div>
+                    <div id="today-insight"><p style="color: var(--text-secondary); font-size: 12px;">Log a meal to get your AI insight.</p></div>
                 </div>
             </div>
 
@@ -906,7 +921,9 @@
             <div class="modal-body">
                 <div class="upload-form-row">
                     <label>Date</label>
-                    <input type="date" id="upload-date">
+                    <button onclick="app.shiftModalDate('upload-date', -1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
+                    <input type="date" id="upload-date" style="flex: 1;">
+                    <button onclick="app.shiftModalDate('upload-date', 1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">›</button>
                 </div>
                 <div class="upload-form-row">
                     <label>Meal</label>
@@ -954,13 +971,15 @@
                 <button class="close-btn" onclick="app.closeModal('quick-add')">✕</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
+                <div class="upload-form-row">
                     <label>Date</label>
-                    <input type="date" id="quick-date">
+                    <button onclick="app.shiftModalDate('quick-date', -1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
+                    <input type="date" id="quick-date" style="flex: 1;">
+                    <button onclick="app.shiftModalDate('quick-date', 1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">›</button>
                 </div>
-                <div class="form-group">
-                    <label>Meal Type</label>
-                    <select id="quick-meal-type">
+                <div class="upload-form-row">
+                    <label>Meal</label>
+                    <select id="quick-meal-type" onchange="app.trackMealType(this.value)">
                         <option value="breakfast">Breakfast</option>
                         <option value="lunch">Lunch</option>
                         <option value="dinner">Dinner</option>
@@ -968,17 +987,17 @@
                         <option value="drink">Drink</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Food Name</label>
+                <div class="upload-form-row">
+                    <label>Food</label>
                     <input type="text" id="quick-name" placeholder="e.g., Chicken sandwich">
                 </div>
-                <div class="form-group">
-                    <label>Calories (kcal)</label>
-                    <input type="number" id="quick-calories">
+                <div class="upload-form-row">
+                    <label>Calories</label>
+                    <input type="number" id="quick-calories" placeholder="kcal">
                 </div>
-                <div class="form-group">
-                    <label>Protein (g) <span style="color: var(--text-tertiary);">(optional)</span></label>
-                    <input type="number" id="quick-protein" step="0.1">
+                <div class="upload-form-row">
+                    <label>Protein</label>
+                    <input type="number" id="quick-protein" step="0.1" placeholder="g (optional)">
                 </div>
                 <button class="btn btn-primary" onclick="app.saveQuickAdd()">Add to Log</button>
             </div>
@@ -1130,7 +1149,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 2;
+        const APP_BUILD = 3;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -1174,6 +1193,7 @@
             selectedTodayDate: null,
             lastMealType: null,
             lastMealDate: null,
+            insightCache: {},
 
             async init() {
                 await initDB();
@@ -1218,9 +1238,13 @@
                     this.selectedTodayDate = this.getCurrentDateString();
                 }
 
+                const todayStr = this.getCurrentDateString();
                 document.getElementById('header-date').textContent = this.formatDisplayDate(this.selectedTodayDate);
                 document.getElementById('today-date-filter').value = this.selectedTodayDate;
-                document.getElementById('today-date-filter').max = this.getCurrentDateString();
+                document.getElementById('today-date-filter').max = todayStr;
+                const nextBtn = document.getElementById('today-date-next');
+                nextBtn.disabled = this.selectedTodayDate >= todayStr;
+                nextBtn.style.opacity = this.selectedTodayDate >= todayStr ? '0.35' : '1';
                 
                 // Set default dates in forms
                 document.getElementById('upload-date').valueAsDate = today;
@@ -1234,9 +1258,29 @@
 
             setViewDate(date) {
                 if (!this.isValidDateString(date)) return;
+                const today = this.getCurrentDateString();
+                if (date > today) return;
                 this.selectedTodayDate = date;
                 this.updateDate();
                 this.refreshToday();
+            },
+
+            shiftViewDate(delta) {
+                const [y, m, d] = this.selectedTodayDate.split('-').map(Number);
+                const date = new Date(y, m - 1, d + delta);
+                const shifted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                this.setViewDate(shifted);
+            },
+
+            shiftModalDate(inputId, delta) {
+                const input = document.getElementById(inputId);
+                const current = input.value || this.getCurrentDateString();
+                const [y, m, d] = current.split('-').map(Number);
+                const date = new Date(y, m - 1, d + delta);
+                const shifted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                if (shifted <= this.getCurrentDateString()) {
+                    input.value = shifted;
+                }
             },
 
             async loadProfile() {
@@ -1443,11 +1487,12 @@
             async refreshToday() {
                 const selectedDate = this.selectedTodayDate || this.getCurrentDateString();
                 const entries = await this.getFoodEntries(selectedDate);
-                
+
                 const consumed = entries.reduce((sum, e) => sum + (e.calories || 0), 0);
                 const protein = entries.reduce((sum, e) => sum + (e.protein_g || 0), 0);
                 const carbs = entries.reduce((sum, e) => sum + (e.carbs_g || 0), 0);
                 const fat = entries.reduce((sum, e) => sum + (e.fat_g || 0), 0);
+                const fiber = entries.reduce((sum, e) => sum + (e.fibre_g || 0), 0);
                 
                 const target = this.profile?.target_kcal || 2000;
                 const remaining = target - consumed;
@@ -1516,6 +1561,16 @@
                 } else {
                     document.getElementById('today-weight').textContent = 'No weight logged yet';
                 }
+
+                // RDA panel
+                this.renderRDA({ consumed, protein, carbs, fat, fiber });
+
+                // AI insight — auto-fetch once per date if entries exist
+                if (entries.length > 0) {
+                    this.fetchInsight(false, { consumed, protein, carbs, fat, fiber });
+                } else {
+                    document.getElementById('today-insight').innerHTML = '<p style="color: var(--text-secondary); font-size: 12px;">Log a meal to get your AI insight.</p>';
+                }
             },
 
             groupMealsByType(entries) {
@@ -1524,6 +1579,136 @@
                     type: type.charAt(0).toUpperCase() + type.slice(1),
                     entries: entries.filter(e => e.meal_type === type)
                 })).filter(g => g.entries.length > 0);
+            },
+
+            calculateRDA() {
+                const p = this.profile;
+                if (!p) return null;
+                const weight = p.current_weight_kg || 75;
+                const maintenance = p.maintenance_kcal || 2000;
+                const activityProtein = { sedentary: 0.8, light: 1.0, moderate: 1.4, very: 1.8 };
+                const proteinPerKg = activityProtein[p.activity_level] || 1.0;
+                return {
+                    calories: p.target_kcal || 2000,
+                    protein: Math.round(proteinPerKg * weight),
+                    carbs: Math.round((maintenance * 0.50) / 4),
+                    fat: Math.round((maintenance * 0.30) / 9),
+                    fiber: p.sex === 'male' ? 38 : 25,
+                };
+            },
+
+            rdaRow(label, consumed, rda, unit, type = 'budget') {
+                if (!rda) return '';
+                const pct = Math.round(consumed / rda * 100);
+                const barPct = Math.min(pct, 100);
+                let color;
+                if (type === 'goal') {
+                    color = pct >= 90 ? 'var(--accent-success)' : pct >= 50 ? 'var(--accent-info)' : 'var(--accent-warning)';
+                } else {
+                    color = pct > 110 ? 'var(--accent-danger)' : pct > 90 ? 'var(--accent-warning)' : 'var(--accent-success)';
+                }
+                return `
+                    <div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px;">
+                            <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">${label}</span>
+                            <span style="font-size: 12px; color: var(--text-secondary);">
+                                <strong style="color: var(--text-primary);">${Math.round(consumed)}${unit}</strong>
+                                <span style="color: var(--text-tertiary);"> / ${rda}${unit}</span>
+                                &nbsp;<strong style="color: ${color};">${pct}%</strong>
+                            </span>
+                        </div>
+                        <div style="background: var(--bg-tertiary); border-radius: 4px; height: 7px; overflow: hidden;">
+                            <div style="width: ${barPct}%; background: ${color}; border-radius: 4px; height: 100%; transition: width 0.6s ease;"></div>
+                        </div>
+                    </div>`;
+            },
+
+            renderRDA({ consumed, protein, carbs, fat, fiber }) {
+                const rda = this.calculateRDA();
+                if (!rda || consumed === 0) {
+                    document.getElementById('today-rda').innerHTML = '<p style="color: var(--text-secondary); font-size: 12px;">No meals logged yet</p>';
+                    return;
+                }
+                document.getElementById('today-rda').innerHTML =
+                    this.rdaRow('Calories', consumed, rda.calories, ' kcal', 'budget') +
+                    this.rdaRow('Protein', protein, rda.protein, 'g', 'goal') +
+                    this.rdaRow('Carbohydrates', carbs, rda.carbs, 'g', 'budget') +
+                    this.rdaRow('Fat', fat, rda.fat, 'g', 'budget') +
+                    this.rdaRow('Fibre', fiber, rda.fiber, 'g', 'goal') +
+                    (fiber === 0 ? '<p style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">Fibre data only available from label scans</p>' : '');
+            },
+
+            async fetchInsight(force = false, totals = null) {
+                const date = this.selectedTodayDate || this.getCurrentDateString();
+
+                if (!force && this.insightCache[date]) {
+                    this.renderInsight(this.insightCache[date]);
+                    return;
+                }
+
+                if (!totals) {
+                    const entries = await this.getFoodEntries(date);
+                    totals = {
+                        consumed: entries.reduce((s, e) => s + (e.calories || 0), 0),
+                        protein:  entries.reduce((s, e) => s + (e.protein_g || 0), 0),
+                        carbs:    entries.reduce((s, e) => s + (e.carbs_g || 0), 0),
+                        fat:      entries.reduce((s, e) => s + (e.fat_g || 0), 0),
+                        fiber:    entries.reduce((s, e) => s + (e.fibre_g || 0), 0),
+                    };
+                }
+
+                const rda = this.calculateRDA();
+                if (!rda || !this.profile) return;
+
+                document.getElementById('today-insight').innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--bg-secondary); border-radius: 10px; border: 1px solid var(--border-color);">
+                        <div class="loading" style="flex-shrink: 0; width: 20px; height: 20px; border-width: 2px;"></div>
+                        <span style="font-size: 13px; color: var(--text-secondary);">Generating your personalised insight…</span>
+                    </div>`;
+
+                try {
+                    const response = await fetch('https://calorie-extractor.dbeale75.workers.dev/api/daily-insight', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sex: this.profile.sex,
+                            age: this.profile.age,
+                            activity_level: this.profile.activity_level,
+                            target_kcal: this.profile.target_kcal,
+                            maintenance_kcal: this.profile.maintenance_kcal,
+                            current_weight_kg: this.profile.current_weight_kg,
+                            target_weight_kg: this.profile.target_weight_kg,
+                            consumed: totals.consumed,
+                            protein: totals.protein,
+                            carbs: totals.carbs,
+                            fat: totals.fat,
+                            fiber: totals.fiber,
+                            rda_protein: rda.protein,
+                            rda_carbs: rda.carbs,
+                            rda_fat: rda.fat,
+                            rda_fiber: rda.fiber,
+                        })
+                    });
+                    const data = await response.json();
+                    this.insightCache[date] = data;
+                    this.renderInsight(data);
+                } catch {
+                    document.getElementById('today-insight').innerHTML = '<p style="font-size: 12px; color: var(--text-secondary);">Could not load insight. Tap ↻ to try again.</p>';
+                }
+            },
+
+            renderInsight({ insight, mood }) {
+                const moodMap = {
+                    great: { emoji: '🌟', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.25)', color: '#065f46' },
+                    good:  { emoji: '💪', bg: 'rgba(14,165,233,0.08)', border: 'rgba(14,165,233,0.25)', color: '#0c4a6e' },
+                    caution: { emoji: '⚡', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.30)', color: '#78350f' },
+                };
+                const m = moodMap[mood] || moodMap.good;
+                document.getElementById('today-insight').innerHTML = `
+                    <div style="display: flex; gap: 12px; padding: 14px; background: ${m.bg}; border: 1px solid ${m.border}; border-radius: 10px;">
+                        <span style="font-size: 22px; flex-shrink: 0; line-height: 1.3;">${m.emoji}</span>
+                        <p style="font-size: 13px; line-height: 1.65; color: ${m.color}; font-weight: 500; margin: 0;">${insight}</p>
+                    </div>`;
             },
 
             async refreshWeek() {
@@ -1792,11 +1977,23 @@
 
             trackMealType(value) {
                 this.lastMealType = value;
-                this.lastMealDate = document.getElementById('upload-date').value;
+                const dateEl = document.getElementById('upload-date').closest('.modal.active')
+                    ? document.getElementById('upload-date')
+                    : document.getElementById('quick-date');
+                this.lastMealDate = dateEl.value;
             },
 
             openQuickAdd() {
-                document.getElementById('quick-date').valueAsDate = new Date();
+                const today = this.getCurrentDateString();
+                document.getElementById('quick-date').value = today;
+
+                const mealSelect = document.getElementById('quick-meal-type');
+                if (this.lastMealDate === today && this.lastMealType) {
+                    mealSelect.value = this.lastMealType;
+                } else {
+                    mealSelect.value = 'breakfast';
+                }
+
                 this.openModal('quick-add');
             },
 
@@ -1829,7 +2026,17 @@
                 reader.onload = async (e) => {
                     const base64 = e.target.result.split(',')[1];
                     const resultDiv = document.getElementById('extraction-result');
-                    resultDiv.innerHTML = '<div class="loading" style="margin: 16px auto;"></div> Analysing image...';
+                    resultDiv.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px 16px; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color);">
+                            <div style="position: relative; width: 48px; height: 48px;">
+                                <div style="position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--bg-tertiary);"></div>
+                                <div class="loading" style="position: absolute; inset: 0; width: 48px; height: 48px; border-width: 3px;"></div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Analysing image</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Extracting nutrition data…</div>
+                            </div>
+                        </div>`;
 
                     try {
                         // Call Cloudflare Worker endpoint
@@ -1871,37 +2078,41 @@
                 const data = this.currentReviewData;
                 
                 const fieldsHtml = `
-                    <div class="form-group">
-                        <label>Food Name</label>
+                    ${(data.image_type === 'food_photo' || data.confidence || (data.warnings && data.warnings.length)) ? `
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 9px 12px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.35); border-radius: 8px;">
+                        <span style="font-size: 16px; flex-shrink: 0;">⚠️</span>
+                        <div style="font-size: 12px; font-weight: 500; color: #92400e; line-height: 1.4;">
+                            ${data.image_type === 'food_photo' ? 'Estimated from photo' : (data.warnings && data.warnings.length ? data.warnings.join(', ') : 'Review values')}${data.confidence ? ` &nbsp;·&nbsp; Confidence: <strong>${Math.round(data.confidence * 100)}%</strong>` : ''}
+                        </div>
+                    </div>` : ''}
+                    <div class="upload-form-row">
+                        <label>Food</label>
                         <input type="text" id="review-name" value="${data.food_name || ''}">
                     </div>
-                    <div class="form-group">
+                    <div class="upload-form-row">
                         <label>Brand</label>
                         <input type="text" id="review-brand" value="${data.brand || ''}">
                     </div>
-                    <div class="form-group">
-                        <label>Serving Size</label>
+                    <div class="upload-form-row">
+                        <label>Serving</label>
                         <input type="text" id="review-serving" value="${data.serving_size_text || ''}">
                     </div>
-                    <div class="form-group">
-                        <label>Calories (kcal)</label>
-                        <input type="number" id="review-calories" value="${data.calories_kcal || ''}">
+                    <div class="upload-form-row">
+                        <label>Calories</label>
+                        <input type="number" id="review-calories" value="${data.calories_kcal || ''}" placeholder="kcal">
                     </div>
-                    <div class="form-group">
-                        <label>Protein (g)</label>
-                        <input type="number" id="review-protein" value="${data.protein_g || ''}" step="0.1">
+                    <div class="upload-form-row">
+                        <label>Protein</label>
+                        <input type="number" id="review-protein" value="${data.protein_g || ''}" step="0.1" placeholder="g">
                     </div>
-                    <div class="form-group">
-                        <label>Carbs (g)</label>
-                        <input type="number" id="review-carbs" value="${data.carbs_g || ''}" step="0.1">
+                    <div class="upload-form-row">
+                        <label>Carbs</label>
+                        <input type="number" id="review-carbs" value="${data.carbs_g || ''}" step="0.1" placeholder="g">
                     </div>
-                    <div class="form-group">
-                        <label>Fat (g)</label>
-                        <input type="number" id="review-fat" value="${data.fat_g || ''}" step="0.1">
+                    <div class="upload-form-row">
+                        <label>Fat</label>
+                        <input type="number" id="review-fat" value="${data.fat_g || ''}" step="0.1" placeholder="g">
                     </div>
-                    ${data.image_type === 'food_photo' ? `<p style="font-size: 11px; color: var(--accent-info); margin-bottom: 8px; padding: 6px 10px; background: rgba(14,165,233,0.08); border-radius: 6px;">📷 Values estimated from food photo — please review carefully</p>` : ''}
-                    ${data.confidence ? `<p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;">Confidence: ${Math.round(data.confidence * 100)}%</p>` : ''}
-                    ${data.warnings && data.warnings.length ? `<p style="font-size: 11px; color: var(--accent-warning); margin-bottom: 12px;">⚠️ ${data.warnings.join(', ')}</p>` : ''}
                 `;
                 
                 document.getElementById('review-fields').innerHTML = fieldsHtml;
@@ -1990,6 +2201,8 @@
                     store.add(entry);
                     
                     transaction.oncomplete = () => {
+                        this.lastMealType = entry.meal_type;
+                        this.lastMealDate = entry.date;
                         document.getElementById('quick-name').value = '';
                         document.getElementById('quick-calories').value = '';
                         document.getElementById('quick-protein').value = '';

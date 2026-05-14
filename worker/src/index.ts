@@ -34,6 +34,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+interface InsightRequest {
+  sex: string;
+  age: number;
+  activity_level: string;
+  target_kcal: number;
+  maintenance_kcal: number;
+  current_weight_kg: number;
+  target_weight_kg: number;
+  consumed: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  rda_protein: number;
+  rda_carbs: number;
+  rda_fat: number;
+  rda_fiber: number;
+}
+
 export default {
   async fetch(request: Request, env: any): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -45,44 +64,57 @@ export default {
     }
 
     const url = new URL(request.url);
-    if (!url.pathname.endsWith('/api/extract-nutrition')) {
-      return new Response('Not found', { status: 404 });
-    }
+    const pathname = url.pathname;
 
-    try {
-      const body: ExtractRequest = await request.json();
-
-      if (!body.image_base64 || !body.filename) {
-        return new Response(
-          JSON.stringify({ error: 'Missing image_base64 or filename' }),
-          { status: 400, headers: corsHeaders }
-        );
-      }
-
-      const openRouterKey = env.OPENROUTER_API_KEY;
-      if (!openRouterKey) {
-        return new Response(
-          JSON.stringify({ error: 'API not configured' }),
-          { status: 500, headers: corsHeaders }
-        );
-      }
-
-      const result = await callOpenRouter(body.image_base64, openRouterKey);
-
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      });
-    } catch (error) {
-      console.error('Error:', error);
+    const openRouterKey = env.OPENROUTER_API_KEY;
+    if (!openRouterKey) {
       return new Response(
-        JSON.stringify({
-          error: 'Extraction failed',
-          details: error instanceof Error ? error.message : 'Unknown error',
-        }),
+        JSON.stringify({ error: 'API not configured' }),
         { status: 500, headers: corsHeaders }
       );
     }
+
+    if (pathname.endsWith('/api/extract-nutrition')) {
+      try {
+        const body: ExtractRequest = await request.json();
+        if (!body.image_base64 || !body.filename) {
+          return new Response(
+            JSON.stringify({ error: 'Missing image_base64 or filename' }),
+            { status: 400, headers: corsHeaders }
+          );
+        }
+        const result = await callOpenRouter(body.image_base64, openRouterKey);
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        return new Response(
+          JSON.stringify({ error: 'Extraction failed', details: error instanceof Error ? error.message : 'Unknown error' }),
+          { status: 500, headers: corsHeaders }
+        );
+      }
+    }
+
+    if (pathname.endsWith('/api/daily-insight')) {
+      try {
+        const body: InsightRequest = await request.json();
+        const result = await callInsight(body, openRouterKey);
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        return new Response(
+          JSON.stringify({ error: 'Insight failed', details: error instanceof Error ? error.message : 'Unknown error' }),
+          { status: 500, headers: corsHeaders }
+        );
+      }
+    }
+
+    return new Response('Not found', { status: 404 });
   },
 };
 
@@ -294,4 +326,54 @@ function sanitizeConfidence(value: any): number {
     return Math.round(num * 100) / 100;
   }
   return 0.5;
+}
+
+async function callInsight(data: InsightRequest, apiKey: string): Promise<{ insight: string; mood: string }> {
+  const pct = (v: number, rda: number) => rda > 0 ? Math.round(v / rda * 100) : 0;
+  const remaining = Math.max(0, data.target_kcal - data.consumed);
+
+  const prompt = `You are a warm, knowledgeable nutrition coach. Analyse this person's nutrition for the day and write a brief (2-3 sentences) encouraging insight. Be specific about the numbers, positive in tone, and include one practical observation. No bullet points or lists.
+
+Profile: ${data.sex}, age ${data.age}, ${data.activity_level} activity, ${data.current_weight_kg}kg (target ${data.target_weight_kg}kg)
+Daily calorie target: ${data.target_kcal} kcal (maintenance: ${data.maintenance_kcal} kcal)
+
+Today so far:
+- Calories: ${data.consumed} kcal — ${pct(data.consumed, data.target_kcal)}% of target, ${remaining} kcal remaining
+- Protein: ${data.protein}g — ${pct(data.protein, data.rda_protein)}% of ${data.rda_protein}g RDA
+- Carbs: ${data.carbs}g — ${pct(data.carbs, data.rda_carbs)}% of ${data.rda_carbs}g RDA
+- Fat: ${data.fat}g — ${pct(data.fat, data.rda_fat)}% of ${data.rda_fat}g RDA
+- Fibre: ${data.fiber}g — ${pct(data.fiber, data.rda_fiber)}% of ${data.rda_fiber}g RDA
+
+Return ONLY this JSON, no other text:
+{"insight": "2-3 sentence insight here", "mood": "great|good|caution"}
+
+Use "great" if doing very well overall, "good" if on track, "caution" if something needs attention.`;
+
+  const response = await fetch('https://openrouter.ai/api/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://dnb-calories.example.com',
+      'X-Title': 'DNB Calories',
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-4o-mini',
+      max_tokens: 250,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!response.ok) throw new Error(`OpenRouter error: ${response.status}`);
+
+  const result: any = await response.json();
+  const content: string = result.choices?.[0]?.message?.content || result.content?.[0]?.text || '';
+
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (_) {}
+  }
+  return { insight: content.trim() || 'Keep going — every meal logged is a step forward!', mood: 'good' };
 }

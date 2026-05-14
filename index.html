@@ -806,9 +806,9 @@
             <div class="screen" id="screen-history">
                 <div class="card">
                     <div class="card-title">Food History</div>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <div class="upload-form-row" style="margin-bottom: 12px;">
                         <button onclick="app.shiftModalDate('history-date-filter', -1); app.filterHistory();" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
-                        <input type="date" id="history-date-filter" onchange="app.filterHistory()" style="flex: 1;">
+                        <input type="date" id="history-date-filter" onchange="app.filterHistory()">
                         <button onclick="app.shiftModalDate('history-date-filter', 1); app.filterHistory();" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">›</button>
                     </div>
                     <div id="history-list"></div>
@@ -1177,7 +1177,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 7;
+        const APP_BUILD = 8;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -1455,7 +1455,8 @@
             switchScreen(screenName) {
                 document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
                 document.getElementById(`screen-${screenName}`).classList.add('active');
-                
+                document.querySelector('.content').scrollTop = 0;
+
                 document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
                 event.target.closest('.nav-btn').classList.add('active');
                 

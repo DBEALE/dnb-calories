@@ -1518,15 +1518,16 @@
     </div>
 
     <script>
-        const APP_BUILD = 34;
+        const APP_BUILD = 35;
 
         const CHANGELOG = [
             {
                 date: '2026-05-14',
-                title: 'Offline-first sync',
+                title: 'Offline-first sync + Service Worker',
                 items: [
+                    'App now installs a Service Worker — loads fully from cache with no internet connection',
                     'Data is stored locally and syncs to the server automatically when online',
-                    'Works fully offline — sync catches up the moment connection is restored',
+                    'Sync catches up the moment connection is restored via the online event',
                     'Sync Key in Settings lets you share data across multiple devices',
                     'Last-write-wins conflict resolution; deletes are soft so no data is lost before sync',
                 ]
@@ -1960,6 +1961,10 @@
                 this.updateDate();
                 this.refreshToday();
                 setInterval(() => this.updateDate(), 60000);
+                // Service worker
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                }
                 // Sync setup
                 const keyEl = document.getElementById('sync-key-display');
                 if (keyEl) keyEl.textContent = this.getSyncToken();

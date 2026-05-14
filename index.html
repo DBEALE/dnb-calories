@@ -677,7 +677,10 @@
 
 
                 <div class="card">
-                    <div class="card-title">Latest Weight</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div class="card-title" style="margin: 0;">Weight</div>
+                        <button onclick="app.openWeightForDate()" style="background: none; border: none; cursor: pointer; font-size: 12px; color: var(--accent-info); font-weight: 600; padding: 0;">✏️ Log / Edit</button>
+                    </div>
                     <div id="today-weight" style="font-size: 18px; font-weight: 600;">No entry yet</div>
                 </div>
 
@@ -1246,7 +1249,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 13;
+        const APP_BUILD = 14;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -1664,13 +1667,20 @@
                 }).join('');
                 document.getElementById('today-meals').innerHTML = mealsHtml || '<p style="color: var(--text-secondary); font-size: 12px;">No meals logged yet</p>';
 
-                // Latest weight
-                const allWeights = await this.getWeightEntries('2000-01-01', selectedDate);
-                if (allWeights.length > 0) {
-                    const latest = allWeights[allWeights.length - 1];
-                    document.getElementById('today-weight').textContent = latest.weight_kg + ' kg';
+                // Weight for selected date (or most recent prior)
+                const dateWeights = await this.getWeightEntries(selectedDate, selectedDate);
+                const weightEl = document.getElementById('today-weight');
+                if (dateWeights.length > 0) {
+                    const w = dateWeights[dateWeights.length - 1];
+                    weightEl.innerHTML = `<span>${w.weight_kg} kg</span><span style="font-size: 12px; color: var(--text-tertiary); margin-left: 8px;">${w.time ? 'at ' + w.time : ''}</span>`;
                 } else {
-                    document.getElementById('today-weight').textContent = 'No weight logged yet';
+                    const allWeights = await this.getWeightEntries('2000-01-01', selectedDate);
+                    if (allWeights.length > 0) {
+                        const latest = allWeights[allWeights.length - 1];
+                        weightEl.innerHTML = `<span style="color: var(--text-secondary);">${latest.weight_kg} kg</span><span style="font-size: 12px; color: var(--text-tertiary); margin-left: 8px;">from ${latest.date}</span>`;
+                    } else {
+                        weightEl.innerHTML = '<span style="font-size: 14px; color: var(--text-secondary);">No weight logged yet</span>';
+                    }
                 }
 
                 // RDA panel
@@ -2388,8 +2398,34 @@
             },
 
             openWeightEntry() {
+                this._editingWeightId = null;
                 document.getElementById('weight-entry-date').valueAsDate = new Date();
                 document.getElementById('weight-entry-time').value = new Date().toTimeString().slice(0, 5);
+                document.getElementById('weight-entry-value').value = '';
+                document.getElementById('weight-entry-morning').checked = false;
+                document.getElementById('weight-entry-notes').value = '';
+                this.openModal('weight-entry');
+            },
+
+            async openWeightForDate() {
+                const date = this.selectedTodayDate || this.getCurrentDateString();
+                this._editingWeightId = null;
+                document.getElementById('weight-entry-date').value = date;
+                document.getElementById('weight-entry-time').value = new Date().toTimeString().slice(0, 5);
+                document.getElementById('weight-entry-value').value = '';
+                document.getElementById('weight-entry-morning').checked = false;
+                document.getElementById('weight-entry-notes').value = '';
+
+                const existing = await this.getWeightEntries(date, date);
+                if (existing.length > 0) {
+                    const w = existing[existing.length - 1];
+                    this._editingWeightId = w.id;
+                    document.getElementById('weight-entry-value').value = w.weight_kg;
+                    document.getElementById('weight-entry-time').value = w.time || new Date().toTimeString().slice(0, 5);
+                    document.getElementById('weight-entry-morning').checked = w.is_morning || false;
+                    document.getElementById('weight-entry-notes').value = w.note || '';
+                }
+
                 this.openModal('weight-entry');
             },
 
@@ -2638,13 +2674,15 @@
                     note: document.getElementById('weight-entry-notes').value,
                     created_at: new Date().toISOString()
                 };
+                if (this._editingWeightId) entry.id = this._editingWeightId;
 
                 return new Promise((resolve) => {
                     const transaction = db.transaction(['weightEntries'], 'readwrite');
                     const store = transaction.objectStore('weightEntries');
-                    store.add(entry);
-                    
+                    this._editingWeightId ? store.put(entry) : store.add(entry);
+
                     transaction.oncomplete = () => {
+                        this._editingWeightId = null;
                         this.closeModal('weight-entry');
                         this.refreshAll();
                         resolve();

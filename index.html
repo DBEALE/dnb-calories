@@ -610,7 +610,10 @@
                 <h1 id="header-title">Today</h1>
                 <div class="header-date" id="header-date"></div>
             </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="app-version-display" style="font-size: 10px; color: var(--text-tertiary); font-weight: 500;"></span>
             <button class="action-icon" onclick="app.openSettings()" style="background: none; border: none; font-size: 20px; cursor: pointer;">⚙️</button>
+        </div>
         </div>
 
         <!-- Content -->
@@ -1127,6 +1130,8 @@
     </div>
 
     <script>
+        const APP_BUILD = 2;
+
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
         const DB_VERSION = 1;
@@ -1172,6 +1177,7 @@
 
             async init() {
                 await initDB();
+                document.getElementById('app-version-display').textContent = 'b' + APP_BUILD;
                 this.loadProfile();
                 this.selectedTodayDate = this.getCurrentDateString();
                 this.updateDate();

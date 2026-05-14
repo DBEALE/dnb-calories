@@ -1431,9 +1431,20 @@
     </div>
 
     <script>
-        const APP_BUILD = 22;
+        const APP_BUILD = 23;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'Macro pie chart severity borders',
+                items: [
+                    'Pie chart segments now show a coloured border when a macro exceeds its target',
+                    '6–15% over target: amber border (5px)',
+                    'More than 15% over target: red border (7px) — the thicker the border, the more severe',
+                    'Within target (≤5% over): invisible gap only, no distraction',
+                    'Works correctly in both light and dark mode',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Configurable macro targets',
@@ -2265,13 +2276,24 @@
                 }));
 
                 if (hasMacros) {
+                    const bgGap = document.body.classList.contains('dark') ? '#0f172a' : '#f0f2f7';
+                    const segBorder = (actual, target) => {
+                        const excess = actual - target;
+                        if (excess <= 5)  return { width: 2, color: bgGap };
+                        if (excess <= 15) return { width: 5, color: '#f59e0b' };
+                        return              { width: 7, color: '#ef4444' };
+                    };
+                    const pb = segBorder(actualP, TARGETS.p);
+                    const cb = segBorder(actualC, TARGETS.c);
+                    const fb = segBorder(actualF, TARGETS.f);
+
                     this.createChart('log-macro-pie', 'doughnut', {
                         labels: ['Protein', 'Carbs', 'Fat'],
                         datasets: [{
                             data: [Math.round(pKcal), Math.round(cKcal), Math.round(fKcal)],
                             backgroundColor: ['#f59e0b', '#0ea5e9', '#8b5cf6'],
-                            borderWidth: 3,
-                            borderColor: 'var(--bg-primary)',
+                            borderWidth: [pb.width, cb.width, fb.width],
+                            borderColor:  [pb.color,  cb.color,  fb.color],
                             hoverOffset: 6,
                         }]
                     });

@@ -1149,11 +1149,11 @@
     </div>
 
     <script>
-        const APP_BUILD = 3;
+        const APP_BUILD = 4;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
-        const DB_VERSION = 1;
+        const DB_VERSION = 2;
         let db;
 
         function initDB() {
@@ -1180,6 +1180,9 @@
                         const store = database.createObjectStore('weightEntries', { keyPath: 'id', autoIncrement: true });
                         store.createIndex('date', 'date');
                     }
+                    if (!database.objectStoreNames.contains('insights')) {
+                        database.createObjectStore('insights', { keyPath: 'date' });
+                    }
                 };
             });
         }
@@ -1193,7 +1196,6 @@
             selectedTodayDate: null,
             lastMealType: null,
             lastMealDate: null,
-            insightCache: {},
 
             async init() {
                 await initDB();
@@ -1638,13 +1640,28 @@
                     (fiber === 0 ? '<p style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">Fibre data only available from label scans</p>' : '');
             },
 
+            insightFingerprint(totals) {
+                return `${Math.round(totals.consumed)}|${Math.round(totals.protein)}|${Math.round(totals.carbs)}|${Math.round(totals.fat)}|${Math.round(totals.fiber)}`;
+            },
+
+            getStoredInsight(date) {
+                return new Promise((resolve) => {
+                    const tx = db.transaction(['insights'], 'readonly');
+                    const req = tx.objectStore('insights').get(date);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                });
+            },
+
+            saveStoredInsight(date, insight, mood, fingerprint) {
+                const tx = db.transaction(['insights'], 'readwrite');
+                tx.objectStore('insights').put({ date, insight, mood, fingerprint });
+            },
+
             async fetchInsight(force = false, totals = null) {
                 const date = this.selectedTodayDate || this.getCurrentDateString();
-
-                if (!force && this.insightCache[date]) {
-                    this.renderInsight(this.insightCache[date]);
-                    return;
-                }
+                const rda = this.calculateRDA();
+                if (!rda || !this.profile) return;
 
                 if (!totals) {
                     const entries = await this.getFoodEntries(date);
@@ -1657,8 +1674,15 @@
                     };
                 }
 
-                const rda = this.calculateRDA();
-                if (!rda || !this.profile) return;
+                const fingerprint = this.insightFingerprint(totals);
+
+                if (!force) {
+                    const stored = await this.getStoredInsight(date);
+                    if (stored && stored.fingerprint === fingerprint) {
+                        this.renderInsight(stored);
+                        return;
+                    }
+                }
 
                 document.getElementById('today-insight').innerHTML = `
                     <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--bg-secondary); border-radius: 10px; border: 1px solid var(--border-color);">
@@ -1690,7 +1714,7 @@
                         })
                     });
                     const data = await response.json();
-                    this.insightCache[date] = data;
+                    this.saveStoredInsight(date, data.insight, data.mood, fingerprint);
                     this.renderInsight(data);
                 } catch {
                     document.getElementById('today-insight').innerHTML = '<p style="font-size: 12px; color: var(--text-secondary);">Could not load insight. Tap ↻ to try again.</p>';
@@ -1699,8 +1723,8 @@
 
             renderInsight({ insight, mood }) {
                 const moodMap = {
-                    great: { emoji: '🌟', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.25)', color: '#065f46' },
-                    good:  { emoji: '💪', bg: 'rgba(14,165,233,0.08)', border: 'rgba(14,165,233,0.25)', color: '#0c4a6e' },
+                    great:   { emoji: '🌟', bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.25)',  color: '#065f46' },
+                    good:    { emoji: '💪', bg: 'rgba(14,165,233,0.08)',  border: 'rgba(14,165,233,0.25)',  color: '#0c4a6e' },
                     caution: { emoji: '⚡', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.30)', color: '#78350f' },
                 };
                 const m = moodMap[mood] || moodMap.good;

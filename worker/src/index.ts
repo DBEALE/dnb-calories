@@ -332,48 +332,74 @@ async function callInsight(data: InsightRequest, apiKey: string): Promise<{ insi
   const pct = (v: number, rda: number) => rda > 0 ? Math.round(v / rda * 100) : 0;
   const remaining = Math.max(0, data.target_kcal - data.consumed);
 
-  const prompt = `You are a warm, knowledgeable nutrition coach. Analyse this person's nutrition for the day and write a brief (2-3 sentences) encouraging insight. Be specific about the numbers, positive in tone, and include one practical observation. No bullet points or lists.
+  const proteinStatus = pct(data.protein, data.rda_protein) >= 80 ? 'strong' : pct(data.protein, data.rda_protein) >= 50 ? 'moderate' : 'low';
+  const calStatus = pct(data.consumed, data.target_kcal) > 100 ? 'over target' : pct(data.consumed, data.target_kcal) >= 80 ? 'close to target' : 'well under target';
 
-Profile: ${data.sex}, age ${data.age}, ${data.activity_level} activity, ${data.current_weight_kg}kg (target ${data.target_weight_kg}kg)
-Daily calorie target: ${data.target_kcal} kcal (maintenance: ${data.maintenance_kcal} kcal)
+  const prompt = `You are a nutrition coach writing a daily check-in for a specific person. Write exactly 2-3 sentences. Every sentence must reference at least one actual number from the data below — never speak in generalities.
 
-Today so far:
-- Calories: ${data.consumed} kcal — ${pct(data.consumed, data.target_kcal)}% of target, ${remaining} kcal remaining
-- Protein: ${data.protein}g — ${pct(data.protein, data.rda_protein)}% of ${data.rda_protein}g RDA
-- Carbs: ${data.carbs}g — ${pct(data.carbs, data.rda_carbs)}% of ${data.rda_carbs}g RDA
-- Fat: ${data.fat}g — ${pct(data.fat, data.rda_fat)}% of ${data.rda_fat}g RDA
-- Fibre: ${data.fiber}g — ${pct(data.fiber, data.rda_fiber)}% of ${data.rda_fiber}g RDA
+STRICT RULES:
+- Do NOT use filler phrases like "Keep it up", "Great job", "Well done", "You're doing great", "Stay hydrated", "Listen to your body"
+- Do NOT give generic advice unrelated to the actual numbers
+- You MUST mention at least two specific nutrients by name with their actual values
+- Vary your opening — do not start with "You"
+- If protein is low, say so clearly. If calories are high, say so clearly. Be honest but constructive.
 
-Return ONLY this JSON, no other text:
-{"insight": "2-3 sentence insight here", "mood": "great|good|caution"}
+Person: ${data.sex}, age ${data.age}, ${data.activity_level} activity, ${data.current_weight_kg}kg → target ${data.target_weight_kg}kg
+Calorie target: ${data.target_kcal} kcal/day (maintenance ${data.maintenance_kcal} kcal)
 
-Use "great" if doing very well overall, "good" if on track, "caution" if something needs attention.`;
+Today's intake:
+- Calories: ${data.consumed} kcal (${pct(data.consumed, data.target_kcal)}% of target) — ${calStatus}, ${remaining} kcal remaining
+- Protein: ${data.protein}g / ${data.rda_protein}g RDA (${pct(data.protein, data.rda_protein)}%) — ${proteinStatus}
+- Carbs: ${data.carbs}g / ${data.rda_carbs}g RDA (${pct(data.carbs, data.rda_carbs)}%)
+- Fat: ${data.fat}g / ${data.rda_fat}g RDA (${pct(data.fat, data.rda_fat)}%)
+- Fibre: ${data.fiber}g / ${data.rda_fiber}g RDA (${pct(data.fiber, data.rda_fiber)}%)
 
-  const response = await fetch('https://openrouter.ai/api/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://dnb-calories.example.com',
-      'X-Title': 'DNB Calories',
-    },
-    body: JSON.stringify({
-      model: 'openai/gpt-4o-mini',
-      max_tokens: 250,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
+Reply with ONLY this JSON and nothing else:
+{"insight": "2-3 sentences referencing real numbers", "mood": "great|good|caution"}
 
-  if (!response.ok) throw new Error(`OpenRouter error: ${response.status}`);
+mood = "great" if calories on track AND protein >= 80% RDA; "caution" if calories over target OR protein < 40% RDA; otherwise "good".`;
 
-  const result: any = await response.json();
-  const content: string = result.choices?.[0]?.message?.content || result.content?.[0]?.text || '';
+  const models = [
+    'deepseek/deepseek-v4-flash:free',
+    'google/gemma-4-31b-it:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  ];
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch (_) {}
+  const headers = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'HTTP-Referer': 'https://dnb-calories.example.com',
+    'X-Title': 'DNB Calories',
+  };
+
+  for (const model of models) {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (response.status === 429 || response.status === 503) continue;
+    if (!response.ok) throw new Error(`OpenRouter error: ${response.status}`);
+
+    const result: any = await response.json();
+    const content: string = result.choices?.[0]?.message?.content || '';
+
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (_) {}
+    }
+    if (content.trim()) {
+      return { insight: content.trim(), mood: 'good' };
+    }
   }
-  return { insight: content.trim() || 'Keep going — every meal logged is a step forward!', mood: 'good' };
+
+  throw new Error('All models rate limited');
 }

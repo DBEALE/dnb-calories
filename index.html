@@ -522,6 +522,31 @@
             gap: 12px;
         }
 
+        /* Upload modal compact rows */
+        .upload-form-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .upload-form-row label {
+            flex: 0 0 52px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .upload-form-row input,
+        .upload-form-row select {
+            flex: 1;
+            padding: 8px 10px;
+            width: auto;
+        }
+
         /* Responsive */
         @media (min-width: 768px) {
             .content {
@@ -876,13 +901,13 @@
                 <button class="close-btn" onclick="app.closeModal('upload')">✕</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
+                <div class="upload-form-row">
                     <label>Date</label>
                     <input type="date" id="upload-date">
                 </div>
-                <div class="form-group">
-                    <label>Meal Type</label>
-                    <select id="upload-meal-type">
+                <div class="upload-form-row">
+                    <label>Meal</label>
+                    <select id="upload-meal-type" onchange="app.trackMealType(this.value)">
                         <option value="breakfast">Breakfast</option>
                         <option value="lunch">Lunch</option>
                         <option value="dinner">Dinner</option>
@@ -890,10 +915,12 @@
                         <option value="drink">Drink</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Image</label>
-                    <input type="file" id="upload-file" accept="image/*" onchange="app.previewImage()">
-                    <img id="upload-preview" style="max-width: 100%; margin-top: 12px; border-radius: 8px; display: none;">
+                <div class="upload-form-row" style="align-items: flex-start;">
+                    <label style="padding-top: 8px;">Image</label>
+                    <div style="flex: 1;">
+                        <input type="file" id="upload-file" accept="image/*" onchange="app.previewImage()">
+                        <img id="upload-preview" style="max-width: 100%; margin-top: 8px; border-radius: 8px; display: none;">
+                    </div>
                 </div>
                 <button class="btn btn-primary" onclick="app.extractNutrition()">Extract Nutrition</button>
                 <div id="extraction-result" style="margin-top: 16px;"></div>
@@ -1140,6 +1167,8 @@
             charts: {},
             currentReviewData: null,
             selectedTodayDate: null,
+            lastMealType: null,
+            lastMealDate: null,
 
             async init() {
                 await initDB();
@@ -1735,7 +1764,29 @@
             },
 
             openUpload() {
+                const fileInput = document.getElementById('upload-file');
+                fileInput.value = '';
+                const preview = document.getElementById('upload-preview');
+                preview.src = '';
+                preview.style.display = 'none';
+                document.getElementById('extraction-result').innerHTML = '';
+
+                const today = this.getCurrentDateString();
+                document.getElementById('upload-date').value = today;
+
+                const mealSelect = document.getElementById('upload-meal-type');
+                if (this.lastMealDate === today && this.lastMealType) {
+                    mealSelect.value = this.lastMealType;
+                } else {
+                    mealSelect.value = 'breakfast';
+                }
+
                 this.openModal('upload');
+            },
+
+            trackMealType(value) {
+                this.lastMealType = value;
+                this.lastMealDate = document.getElementById('upload-date').value;
             },
 
             openQuickAdd() {
@@ -1880,6 +1931,8 @@
                     store.add(entry);
                     
                     transaction.oncomplete = () => {
+                        this.lastMealType = entry.meal_type;
+                        this.lastMealDate = entry.date;
                         this.closeModal('review');
                         this.refreshAll();
                         resolve();
@@ -1904,6 +1957,8 @@
                     store.add(entry);
                     
                     transaction.oncomplete = () => {
+                        this.lastMealType = entry.meal_type;
+                        this.lastMealDate = entry.date;
                         this.closeModal('review');
                         this.refreshAll();
                         resolve();

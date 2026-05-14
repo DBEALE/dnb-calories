@@ -806,7 +806,11 @@
             <div class="screen" id="screen-history">
                 <div class="card">
                     <div class="card-title">Food History</div>
-                    <input type="date" id="history-date-filter" onchange="app.filterHistory()" style="margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <button onclick="app.shiftModalDate('history-date-filter', -1); app.filterHistory();" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
+                        <input type="date" id="history-date-filter" onchange="app.filterHistory()" style="flex: 1;">
+                        <button onclick="app.shiftModalDate('history-date-filter', 1); app.filterHistory();" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">›</button>
+                    </div>
                     <div id="history-list"></div>
                 </div>
             </div>
@@ -1034,9 +1038,11 @@
                 <button class="close-btn" onclick="app.closeModal('weight-entry')">✕</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
+                <div class="upload-form-row">
                     <label>Date</label>
-                    <input type="date" id="weight-entry-date">
+                    <button onclick="app.shiftModalDate('weight-entry-date', -1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">‹</button>
+                    <input type="date" id="weight-entry-date" style="flex: 1;">
+                    <button onclick="app.shiftModalDate('weight-entry-date', 1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">›</button>
                 </div>
                 <div class="form-group">
                     <label>Time</label>
@@ -1171,7 +1177,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 6;
+        const APP_BUILD = 7;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';

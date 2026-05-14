@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calorie Deficit Tracker</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.body?document.body.classList.add('dark'):document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('dark'));</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <style>
         * {
@@ -598,6 +599,71 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Toggle switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background: var(--bg-tertiary);
+            border-radius: 28px;
+            transition: background 0.2s;
+        }
+        .toggle-slider:before {
+            content: '';
+            position: absolute;
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+        }
+        .toggle-switch input:checked + .toggle-slider { background: var(--accent-info); }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); }
+
+        /* Dark mode */
+        body.dark {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-tertiary: #64748b;
+            --border-color: #334155;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        body.dark .card { background: #1e293b; }
+        body.dark .kpi-card { background: #1e293b; }
+        body.dark .kpi-card.success { background: linear-gradient(135deg, #064e3b, #065f46); }
+        body.dark .kpi-card.warning { background: linear-gradient(135deg, #78350f, #92400e); }
+        body.dark .kpi-card.danger  { background: linear-gradient(135deg, #7f1d1d, #991b1b); }
+        body.dark input,
+        body.dark select,
+        body.dark textarea { background: #0f172a; color: var(--text-primary); border-color: #334155; }
+        body.dark .nav-tabs { background: rgba(15,23,42,0.97); }
+        body.dark .modal-content { background: #1e293b; }
+        body.dark .modal-header { background: #1e293b; border-bottom-color: #334155; }
+        body.dark .btn-secondary { background: #334155; border-color: #475569; color: var(--text-primary); }
+        body.dark .action-btn { background: #1e293b; }
+        body.dark .macro-item { background: var(--bg-primary); }
+        body.dark .toggle-slider:before { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -621,7 +687,7 @@
             <!-- Right side: always visible -->
             <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: 8px;">
                 <span id="app-version-display" style="font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 600; letter-spacing: 0.3px;"></span>
-                <button onclick="app.openSettings()" style="background: rgba(255,255,255,0.12); border: none; border-radius: 8px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">⚙️</button>
+                <button id="settings-btn" onclick="app.openSettings()" style="background: rgba(255,255,255,0.12); border: none; border-radius: 8px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">⚙️</button>
             </div>
         </div>
 
@@ -788,6 +854,20 @@
             </div>
 
             <div class="screen" id="screen-settings">
+                <div class="card">
+                    <div class="card-title">Appearance</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">Dark Mode</div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Easier on the eyes at night</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="dark-mode-toggle" onchange="app.toggleDarkMode(this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-title">Profile</div>
                     <div class="form-group">
@@ -1312,9 +1392,56 @@
     </div>
 
     <script>
-        const APP_BUILD = 17;
+        const APP_BUILD = 18;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'Dark mode',
+                items: [
+                    'Dark mode toggle added in Settings → Appearance',
+                    'Preference persists between sessions via localStorage',
+                    'Applied before first paint to prevent a flash of light mode on load',
+                    'Cards, inputs, modals, navigation, and KPI cards all styled for dark',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Settings toggle button',
+                items: [
+                    'Settings gear button in the header now toggles — tap ⚙️ to open, tap ✕ to return to where you were',
+                    'Correct nav tab re-highlights automatically when dismissing settings',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Calorie ring & nutrition counters on Log screen',
+                items: [
+                    'Replaced KPI cards with a large calorie progress ring showing consumed vs target',
+                    'Ring colour shifts green → amber → red as you approach your target',
+                    'When over target, a second inner ring draws as a spiral/coil in red to show the overflow visually',
+                    'Five nutrition mini-rings below: Protein, Carbs, Fat, Fibre, Salt — each showing grams and % of RDA',
+                    'vs Maintenance deficit/surplus shown as a coloured line below the main ring',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'History tab macros chart & layout',
+                items: [
+                    'Macro Breakdown card added to History tab with a doughnut ring showing P/C/F calorie split',
+                    'Protein (amber), Carbs (blue), Fat (purple) shown with grams, percentage, and mini progress bars',
+                    'History tab layout reorganised: 4-column KPI row → calorie chart → macros ring → insight',
+                    'Note shown when macro data is unavailable for the period',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Add button in Favourites',
+                items: [
+                    'New + Add button in the Favourites modal header to create a favourite from scratch',
+                    'Reuses the Edit Favourite form with a "New Favourite" title and blank fields',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Visual redesign',
@@ -1507,9 +1634,11 @@
             lastMealType: null,
             lastMealDate: null,
             historyPeriod: 'week',
+            previousScreen: 'today',
 
             async init() {
                 await initDB();
+                this.initDarkMode();
                 document.getElementById('app-version-display').textContent = 'b' + APP_BUILD;
                 this.loadProfile();
                 this.selectedTodayDate = this.getCurrentDateString();
@@ -1730,13 +1859,16 @@
             },
 
             switchScreen(screenName) {
+                this.previousScreen = this.currentScreen;
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                event.target.closest('.nav-btn')?.classList.add('active');
+                this.switchScreenDirect(screenName);
+            },
+
+            switchScreenDirect(screenName) {
                 document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
                 document.getElementById(`screen-${screenName}`).classList.add('active');
                 document.querySelector('.content').scrollTop = 0;
-
-                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-                event.target.closest('.nav-btn')?.classList.add('active');
-                
                 this.currentScreen = screenName;
 
                 const isLog = screenName === 'today';
@@ -2503,8 +2635,34 @@
                 document.getElementById(`modal-${name}`).classList.remove('active');
             },
 
+            initDarkMode() {
+                const isDark = localStorage.getItem('darkMode') === 'true';
+                document.body.classList.toggle('dark', isDark);
+                const toggle = document.getElementById('dark-mode-toggle');
+                if (toggle) toggle.checked = isDark;
+            },
+
+            toggleDarkMode(enabled) {
+                document.body.classList.toggle('dark', enabled);
+                localStorage.setItem('darkMode', enabled);
+            },
+
             openSettings() {
-                this.switchScreen('settings');
+                const btn = document.getElementById('settings-btn');
+                if (this.currentScreen === 'settings') {
+                    const target = this.previousScreen || 'today';
+                    document.querySelectorAll('.nav-btn').forEach(b => {
+                        b.classList.toggle('active', b.getAttribute('onclick')?.includes(`'${target}'`));
+                    });
+                    btn.textContent = '⚙️';
+                    btn.style.background = 'rgba(255,255,255,0.12)';
+                    this.switchScreenDirect(target);
+                } else {
+                    this.previousScreen = this.currentScreen;
+                    btn.textContent = '✕';
+                    btn.style.background = 'rgba(255,255,255,0.28)';
+                    this.switchScreenDirect('settings');
+                }
             },
 
             openUpload() {

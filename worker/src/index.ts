@@ -115,6 +115,23 @@ export default {
       }
     }
 
+    if (pathname.endsWith('/api/calorie-target')) {
+      try {
+        const body = await request.json() as any;
+        const result = await callCalorieTarget(body, openRouterKey);
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        return new Response(
+          JSON.stringify({ error: 'Calorie target failed', details: error instanceof Error ? error.message : 'Unknown error' }),
+          { status: 500, headers: corsHeaders }
+        );
+      }
+    }
+
     return new Response('Not found', { status: 404 });
   },
 };
@@ -327,6 +344,62 @@ function sanitizeConfidence(value: any): number {
     return Math.round(num * 100) / 100;
   }
   return 0.5;
+}
+
+async function callCalorieTarget(data: any, apiKey: string): Promise<{ target_kcal: number; reasoning: string }> {
+  const minSafe = data.sex === 'male' ? 1500 : 1200;
+  const deficit = Math.round(data.loss_rate_kg_per_week * 7700 / 7);
+  const mathTarget = Math.max(data.maintenance_kcal - deficit, minSafe);
+
+  const prompt = `You are a nutrition expert. Calculate a safe, personalised daily calorie target.
+
+Profile: ${data.sex}, age ${data.age}, ${data.height_cm}cm, ${data.current_weight_kg}kg → goal ${data.target_weight_kg}kg
+Activity: ${data.activity_level} | Maintenance: ${data.maintenance_kcal} kcal/day
+Desired loss rate: ${data.loss_rate_kg_per_week} kg/week
+
+Standard calculation: ${data.maintenance_kcal} − ${deficit} = ${data.maintenance_kcal - deficit} kcal/day
+Safe minimum: ${minSafe} kcal/day
+
+Validate and adjust if needed. Consider the person's current weight, how far they are from their goal, and whether the rate is sustainable. Provide a rounded, practical number.
+
+Return ONLY this JSON, no other text:
+{"target_kcal": <integer>, "reasoning": "<one concise sentence explaining the recommendation>"}`;
+
+  const models = [
+    'deepseek/deepseek-v4-flash:free',
+    'google/gemma-4-31b-it:free',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  ];
+  const headers = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'HTTP-Referer': 'https://dnb-calories.example.com',
+    'X-Title': 'DNB Calories',
+  };
+
+  for (const model of models) {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST', headers,
+      body: JSON.stringify({ model, max_tokens: 120, messages: [{ role: 'user', content: prompt }] }),
+    });
+    if (!response.ok) continue;
+    const result: any = await response.json();
+    const content: string = result.choices?.[0]?.message?.content || '';
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[0]);
+        if (typeof parsed.target_kcal === 'number' && parsed.target_kcal > 800) {
+          return { target_kcal: Math.round(parsed.target_kcal), reasoning: parsed.reasoning || '' };
+        }
+      } catch (_) {}
+    }
+  }
+
+  return {
+    target_kcal: mathTarget,
+    reasoning: `${data.maintenance_kcal} kcal maintenance minus ${deficit} kcal/day deficit for ${data.loss_rate_kg_per_week} kg/week loss.`,
+  };
 }
 
 async function callInsight(data: InsightRequest, apiKey: string): Promise<{ insight: string; mood: string }> {

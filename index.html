@@ -780,6 +780,11 @@
             </div>
 
             <!-- Settings Screen -->
+            <!-- What's New Screen -->
+            <div class="screen" id="screen-changes">
+                <div id="changes-list"></div>
+            </div>
+
             <div class="screen" id="screen-settings">
                 <div class="card">
                     <div class="card-title">Profile</div>
@@ -869,6 +874,10 @@
             <button class="nav-btn" onclick="app.switchScreen('weight')">
                 <span class="nav-icon">⚖️</span>
                 <span>Weight</span>
+            </button>
+            <button class="nav-btn" onclick="app.switchScreen('changes')">
+                <span class="nav-icon">✨</span>
+                <span>What's New</span>
             </button>
         </div>
     </div>
@@ -1023,6 +1032,55 @@
                     </select>
                 </div>
                 <div id="favourites-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Favourite Modal -->
+    <div class="modal" id="modal-edit-favourite">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Favourite</h2>
+                <button class="close-btn" onclick="app.closeModal('edit-favourite')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-form-row">
+                    <label>Food</label>
+                    <input type="text" id="ef-name">
+                </div>
+                <div class="upload-form-row">
+                    <label>Brand</label>
+                    <input type="text" id="ef-brand" placeholder="optional">
+                </div>
+                <div class="upload-form-row">
+                    <label>Serving</label>
+                    <input type="text" id="ef-serving" placeholder="optional">
+                </div>
+                <div class="upload-form-row">
+                    <label>Calories</label>
+                    <input type="number" id="ef-calories" placeholder="kcal">
+                </div>
+                <div class="upload-form-row">
+                    <label>Protein</label>
+                    <input type="number" id="ef-protein" step="0.1" placeholder="g">
+                </div>
+                <div class="upload-form-row">
+                    <label>Carbs</label>
+                    <input type="number" id="ef-carbs" step="0.1" placeholder="g">
+                </div>
+                <div class="upload-form-row">
+                    <label>Fat</label>
+                    <input type="number" id="ef-fat" step="0.1" placeholder="g">
+                </div>
+                <div class="upload-form-row">
+                    <label>Fibre</label>
+                    <input type="number" id="ef-fibre" step="0.1" placeholder="g">
+                </div>
+                <div class="upload-form-row">
+                    <label>Salt</label>
+                    <input type="number" id="ef-salt" step="0.01" placeholder="g">
+                </div>
+                <button class="btn btn-primary" onclick="app.saveEditFavourite()">Save Favourite</button>
             </div>
         </div>
     </div>
@@ -1249,7 +1307,127 @@
     </div>
 
     <script>
-        const APP_BUILD = 14;
+        const APP_BUILD = 15;
+
+        const CHANGELOG = [
+            {
+                date: '2026-05-14',
+                title: 'Weight logging from Log screen',
+                items: [
+                    'Weight can now be logged or edited directly from the Log screen without switching tabs',
+                    'If a weight entry already exists for the viewed date it pre-fills for editing',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'What\'s New tab',
+                items: [
+                    'Added this changelog screen so you can review what has been added to the app',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Salt tracking',
+                items: [
+                    'Salt (g) added to all entry forms: Scan Label, Manual Entry, Edit Entry, Favourites',
+                    'Salt shown per-item in Today\'s Meals breakdown',
+                    'Salt row added to Nutrition vs RDA panel (6g daily max)',
+                    'Salt included in AI insight data',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Favourites',
+                items: [
+                    'Save any meal as a favourite when logging via Scan Label, Manual Entry, or Edit',
+                    'New ⭐ Favourites button on Log screen — log a saved favourite in one tap',
+                    'Delete favourites from the Favourites modal',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Edit entries from Log screen',
+                items: [
+                    'Tap ✏️ on any meal entry to edit food name, meal type, date, calories, and all macros',
+                    'Delete entry directly from the edit modal',
+                    'Rescan option in Edit Entry — re-extract nutrition from a new photo',
+                    'Save as favourite from the edit modal',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'History tab (Week / Month / Year)',
+                items: [
+                    'Week and Month tabs merged into a single History tab with a period selector',
+                    'Year view added — shows monthly calorie totals for the full year',
+                    'Insight card on History tab with contextual analysis for each period',
+                    'Insight card on Weight tab showing rate of loss and projected target date',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'AI Insight panel',
+                items: [
+                    'Personalised daily insight on the Log screen powered by AI',
+                    'Insight cached per date in IndexedDB — only regenerates when food data changes',
+                    'Fallback to validated free AI models if primary is rate-limited',
+                    'Template-based fallback ensures insight always shows even if all models fail',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Nutrition vs RDA panel',
+                items: [
+                    'Colour-coded progress bars for Calories, Protein, Carbs, Fat, Fibre, and Salt',
+                    'RDA calculated from profile: protein uses activity-adjusted g/kg, fibre is sex-specific',
+                    'Merged with Macros card to eliminate duplication',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Log screen & navigation improvements',
+                items: [
+                    '"Today" tab renamed to "Log"; date navigation moved into the header',
+                    'Tap the date in the header to open the native date picker',
+                    '"Quick Add" renamed to "Manual Entry"; all entry forms given instructions',
+                    'All entry modals now pre-fill with the currently viewed date on the Log screen',
+                    'Meal type remembered between entries on the same day',
+                    'All date fields have ‹ › navigation buttons',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Scan Food Label improvements',
+                items: [
+                    'Photo upload supports both nutrition labels and food photos',
+                    'AI extracts calories, protein, carbs, fat, fibre, and salt automatically',
+                    'Review & Confirm screen uses compact inline layout matching other entry forms',
+                    'Image resets when the modal is opened; stale "Analysing…" message fixed',
+                    'Warning banner shows confidence score and photo-estimation notice',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Today\'s Meals redesign',
+                items: [
+                    'Meals grouped by type (Breakfast, Lunch, Dinner, Snack, Drink) with colour coding',
+                    'Each group shows a calorie subtotal in the header',
+                    'Per-item macro summary line (P / C / F / Fi / Sa) shown where data exists',
+                ]
+            },
+            {
+                date: '2026-05-14',
+                title: 'Initial build',
+                items: [
+                    'Calorie tracking with daily targets and maintenance comparison',
+                    'Weight logging with trend chart',
+                    'Week and month calorie charts',
+                    'Setup wizard with Mifflin-St Jeor maintenance estimate',
+                    'JSON export and import',
+                    'Auto-incrementing build number via git pre-commit hook',
+                ]
+            },
+        ];
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -1536,12 +1714,13 @@
                 document.getElementById('header-log-nav').style.display = isLog ? 'flex' : 'none';
                 document.getElementById('header-title-wrap').style.display = isLog ? 'none' : 'block';
                 if (!isLog) {
-                    const titles = { history: 'History', weight: 'Weight', settings: 'Settings' };
+                    const titles = { history: 'History', weight: 'Weight', settings: 'Settings', changes: 'What\'s New' };
                     document.getElementById('header-title').textContent = titles[screenName] || screenName;
                 }
 
                 if (screenName === 'history') this.refreshHistory();
                 if (screenName === 'weight') this.refreshWeight();
+                if (screenName === 'changes') this.renderChangelog();
             },
 
             async refreshAll() {
@@ -2053,6 +2232,26 @@
                 this.renderWeightInsight(allWeights);
             },
 
+            renderChangelog() {
+                const html = CHANGELOG.map((entry, i) => {
+                    const isLatest = i === 0;
+                    return `
+                        <div class="card" style="${isLatest ? 'border-left: 3px solid var(--accent-info);' : ''}">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">${entry.title}</div>
+                                    <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">${entry.date}</div>
+                                </div>
+                                ${isLatest ? '<span style="font-size: 10px; font-weight: 700; background: var(--accent-info); color: white; padding: 2px 7px; border-radius: 10px; flex-shrink: 0;">NEW</span>' : ''}
+                            </div>
+                            <ul style="margin: 0; padding-left: 16px;">
+                                ${entry.items.map(item => `<li style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5;">${item}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                }).join('');
+                document.getElementById('changes-list').innerHTML = html;
+            },
+
             renderWeightInsight(weights) {
                 const el = document.getElementById('weight-insight');
                 if (weights.length < 2) {
@@ -2234,7 +2433,8 @@
                                 ${fav.brand ? `<div style="font-size: 11px; color: var(--text-tertiary);">${fav.brand}</div>` : ''}
                             </div>
                             <button onclick="app.logFavourite(${fav.id})" style="background: var(--accent-success); color: white; border: none; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;">Log</button>
-                            <button onclick="app.deleteFavourite(${fav.id})" style="background: none; border: none; cursor: pointer; font-size: 18px; color: var(--text-tertiary); flex-shrink: 0; padding: 0;">🗑️</button>
+                            <button onclick="app.openEditFavourite(${fav.id})" style="background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-tertiary); flex-shrink: 0; padding: 0 2px;">✏️</button>
+                            <button onclick="app.deleteFavourite(${fav.id})" style="background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-tertiary); flex-shrink: 0; padding: 0 2px;">🗑️</button>
                         </div>`;
                     }).join('');
                 };
@@ -2267,6 +2467,53 @@
                         this.lastMealDate = entry.date;
                         this.closeModal('favourites');
                         this.refreshAll();
+                    };
+                };
+            },
+
+            openEditFavourite(id) {
+                const req = db.transaction(['favourites'], 'readonly').objectStore('favourites').get(id);
+                req.onsuccess = () => {
+                    const fav = req.result;
+                    if (!fav) return;
+                    this._editingFavId = id;
+                    document.getElementById('ef-name').value    = fav.food_name || '';
+                    document.getElementById('ef-brand').value   = fav.brand || '';
+                    document.getElementById('ef-serving').value = fav.serving_description || '';
+                    document.getElementById('ef-calories').value = fav.calories || '';
+                    document.getElementById('ef-protein').value  = fav.protein_g || '';
+                    document.getElementById('ef-carbs').value    = fav.carbs_g || '';
+                    document.getElementById('ef-fat').value      = fav.fat_g || '';
+                    document.getElementById('ef-fibre').value    = fav.fibre_g || '';
+                    document.getElementById('ef-salt').value     = fav.salt_g || '';
+                    this.openModal('edit-favourite');
+                };
+            },
+
+            saveEditFavourite() {
+                if (!this._editingFavId) return;
+                const tx = db.transaction(['favourites'], 'readwrite');
+                const store = tx.objectStore('favourites');
+                const req = store.get(this._editingFavId);
+                req.onsuccess = () => {
+                    const existing = req.result;
+                    if (!existing) return;
+                    store.put({
+                        ...existing,
+                        food_name: document.getElementById('ef-name').value,
+                        brand: document.getElementById('ef-brand').value || null,
+                        serving_description: document.getElementById('ef-serving').value || null,
+                        calories: parseInt(document.getElementById('ef-calories').value) || 0,
+                        protein_g: parseFloat(document.getElementById('ef-protein').value) || null,
+                        carbs_g:   parseFloat(document.getElementById('ef-carbs').value)   || null,
+                        fat_g:     parseFloat(document.getElementById('ef-fat').value)     || null,
+                        fibre_g:   parseFloat(document.getElementById('ef-fibre').value)   || null,
+                        salt_g:    parseFloat(document.getElementById('ef-salt').value)    || null,
+                    });
+                    tx.oncomplete = () => {
+                        this._editingFavId = null;
+                        this.closeModal('edit-favourite');
+                        this.refreshFavouritesList();
                     };
                 };
             },

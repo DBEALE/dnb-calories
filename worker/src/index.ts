@@ -385,7 +385,7 @@ mood = "great" if calories on track AND protein >= 80% RDA; "caution" if calorie
     });
 
     if (response.status === 429 || response.status === 503) continue;
-    if (!response.ok) throw new Error(`OpenRouter error: ${response.status}`);
+    if (!response.ok) continue;
 
     const result: any = await response.json();
     const content: string = result.choices?.[0]?.message?.content || '';
@@ -393,13 +393,60 @@ mood = "great" if calories on track AND protein >= 80% RDA; "caution" if calorie
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
-        return JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (isValidInsight(parsed.insight)) {
+          parsed.mood = ['great', 'good', 'caution'].includes(parsed.mood) ? parsed.mood : 'good';
+          return parsed;
+        }
       } catch (_) {}
     }
-    if (content.trim()) {
-      return { insight: content.trim(), mood: 'good' };
-    }
+    // If we got a response but it was garbage, try next model
   }
 
-  throw new Error('All models rate limited');
+  // All models failed or produced invalid output — generate a reliable template insight
+  return templateInsight(data);
+}
+
+function isValidInsight(text: any): boolean {
+  if (typeof text !== 'string') return false;
+  if (text.length < 40 || text.length > 600) return false;
+  // Reject code-like patterns, foreign script injections, template artifacts
+  if (/[{}`]|\/\*|\*\/|::|<\/|\$\{|console\.|function\s*\(/.test(text)) return false;
+  // Must be mostly ASCII (rejects garbled unicode injection)
+  const ascii = text.split('').filter((c: string) => c.charCodeAt(0) < 128).length;
+  if (ascii / text.length < 0.90) return false;
+  // Must contain at least one number (we demand data references)
+  if (!/\d/.test(text)) return false;
+  return true;
+}
+
+function templateInsight(data: InsightRequest): { insight: string; mood: string } {
+  const pct = (v: number, r: number) => r > 0 ? Math.round(v / r * 100) : 0;
+  const calPct = pct(data.consumed, data.target_kcal);
+  const protPct = pct(data.protein, data.rda_protein);
+  const remaining = Math.max(0, data.target_kcal - data.consumed);
+  const parts: string[] = [];
+  let mood = 'good';
+
+  if (calPct > 110) {
+    mood = 'caution';
+    parts.push(`You've consumed ${data.consumed} kcal, which is ${calPct - 100}% over your ${data.target_kcal} kcal target.`);
+  } else if (calPct >= 80) {
+    parts.push(`You've consumed ${data.consumed} kcal — ${calPct}% of your ${data.target_kcal} kcal target, with ${remaining} kcal remaining.`);
+    mood = 'great';
+  } else {
+    parts.push(`You've logged ${data.consumed} kcal so far, leaving ${remaining} kcal of your ${data.target_kcal} kcal daily target.`);
+  }
+
+  if (protPct >= 80) {
+    parts.push(`Protein is looking strong at ${data.protein}g (${protPct}% of your ${data.rda_protein}g RDA).`);
+    if (mood !== 'caution') mood = 'great';
+  } else if (protPct < 40) {
+    parts.push(`Protein is low at ${data.protein}g — try to work toward your ${data.rda_protein}g RDA throughout the day.`);
+    if (mood !== 'caution') mood = 'good';
+  } else {
+    parts.push(`Protein is at ${data.protein}g (${protPct}% of your ${data.rda_protein}g RDA) — keep building toward your target.`);
+  }
+
+  return { insight: parts.join(' '), mood };
 }

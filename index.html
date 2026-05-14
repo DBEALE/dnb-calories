@@ -438,7 +438,7 @@
         /* Macro Summary */
         .macro-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 12px;
         }
 
@@ -678,6 +678,10 @@
                         <div class="macro-item">
                             <div class="macro-label">Fat</div>
                             <div class="macro-value" id="macro-fat">0g</div>
+                        </div>
+                        <div class="macro-item">
+                            <div class="macro-label">Fibre</div>
+                            <div class="macro-value" id="macro-fibre">0g</div>
                         </div>
                     </div>
                 </div>
@@ -1167,7 +1171,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 5;
+        const APP_BUILD = 6;
 
         // IndexedDB Setup
         const DB_NAME = 'CalorieTracker';
@@ -1549,6 +1553,7 @@
                 document.getElementById('macro-protein').textContent = Math.round(protein) + 'g';
                 document.getElementById('macro-carbs').textContent = Math.round(carbs) + 'g';
                 document.getElementById('macro-fat').textContent = Math.round(fat) + 'g';
+                document.getElementById('macro-fibre').textContent = Math.round(fiber) + 'g';
 
                 // Meals
                 const mealAccents = {
@@ -1566,6 +1571,7 @@
                             e.protein_g ? `P ${Math.round(e.protein_g)}g` : '',
                             e.carbs_g   ? `C ${Math.round(e.carbs_g)}g`   : '',
                             e.fat_g     ? `F ${Math.round(e.fat_g)}g`     : '',
+                            e.fibre_g   ? `Fi ${Math.round(e.fibre_g)}g`  : '',
                         ].filter(Boolean).join('  ·  ');
                         const subtitle = [e.brand, e.serving_description].filter(Boolean).join(' · ');
                         return `

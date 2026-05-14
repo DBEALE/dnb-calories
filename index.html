@@ -1505,7 +1505,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 28;
+        const APP_BUILD = 29;
 
         const CHANGELOG = [
             {
@@ -1901,6 +1901,7 @@
             lastMealDate: null,
             historyPeriod: 'week',
             previousScreen: 'today',
+            _wizardTargetCache: {},
             weightChange7d: null,
 
             async init() {
@@ -2046,6 +2047,15 @@
                 const targetInput = document.getElementById('wizard-target');
                 const noteEl = document.getElementById('wizard-target-note');
 
+                // Return cached result instantly if inputs haven't changed
+                const cacheKey = `${maintenance}_${lossRate}`;
+                if (this._wizardTargetCache[cacheKey]) {
+                    const c = this._wizardTargetCache[cacheKey];
+                    targetInput.value = c.target_kcal;
+                    noteEl.innerHTML = `<span style="color:var(--accent-info);">✨ AI suggested</span>${c.reasoning ? ` · ${c.reasoning}` : ''}`;
+                    return;
+                }
+
                 targetInput.value = '';
                 targetInput.disabled = true;
                 targetInput.placeholder = 'Calculating…';
@@ -2072,6 +2082,7 @@
                         })
                     });
                     const data = await response.json();
+                    this._wizardTargetCache[cacheKey] = data;
                     targetInput.value = data.target_kcal;
                     noteEl.innerHTML = `<span style="color:var(--accent-info);">✨ AI suggested</span>${data.reasoning ? ` · ${data.reasoning}` : ''}`;
                 } catch {
@@ -2407,7 +2418,10 @@
                     Drink:     { color: '#0ea5e9', bg: 'rgba(14,165,233,0.08)' },
                 };
                 const mealsHtml = this.groupMealsByType(entries).map(group => {
-                    const groupTotal = group.entries.reduce((sum, e) => sum + (e.calories || 0), 0);
+                    const groupTotal   = group.entries.reduce((sum, e) => sum + (e.calories   || 0), 0);
+                    const groupProtein = group.entries.reduce((sum, e) => sum + (e.protein_g  || 0), 0);
+                    const groupCarbs   = group.entries.reduce((sum, e) => sum + (e.carbs_g    || 0), 0);
+                    const groupFat     = group.entries.reduce((sum, e) => sum + (e.fat_g      || 0), 0);
                     const accent = mealAccents[group.type] || { color: 'var(--text-secondary)', bg: 'var(--bg-secondary)' };
                     const items = group.entries.map(e => {
                         const macros = [
@@ -2433,10 +2447,11 @@
                     }).join('');
                     return `
                     <div style="border-left: 3px solid ${accent.color}; background: ${accent.bg}; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;">
                             <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: ${accent.color};">${group.type}</span>
                             <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${groupTotal} <span style="font-weight: 400; color: var(--text-tertiary); font-size: 10px;">kcal</span></span>
                         </div>
+                        ${this.macroDiscrepancySVG(groupProtein, groupCarbs, groupFat)}
                         ${items}
                     </div>`;
                 }).join('');
@@ -2691,6 +2706,60 @@
                 }
             },
 
+            macroDiscrepancySVG(protein, carbs, fat) {
+                const pK = protein * 4, cK = carbs * 4, fK = fat * 9;
+                const total = pK + cK + fK;
+                if (total === 0) return '';
+                const aP = Math.round(pK / total * 100);
+                const aC = Math.round(cK / total * 100);
+                const aF = Math.round(fK / total * 100);
+                const tP = this.profile?.macro_protein_pct ?? 15;
+                const tC = this.profile?.macro_carbs_pct   ?? 55;
+                const tF = this.profile?.macro_fat_pct     ?? 30;
+                const col = (a, t) => Math.abs(a-t) <= 7 ? '#10b981' : Math.abs(a-t) <= 15 ? '#f59e0b' : '#ef4444';
+                const W = 260, BH = 7, GAP = 5, PL = 14, PR = 26, TW = W - PL - PR;
+                const row = (y, lbl, actual, target) => {
+                    const fw = +(Math.min(actual, 100) / 100 * TW).toFixed(1);
+                    const tx = +(PL + target / 100 * TW).toFixed(1);
+                    const c = col(actual, target);
+                    return `<text x="0" y="${y+BH-1}" font-size="8" font-weight="700" fill="#9ca3af" font-family="system-ui,sans-serif">${lbl}</text>
+                        <rect x="${PL}" y="${y}" width="${TW}" height="${BH}" rx="${BH/2}" fill="rgba(128,128,128,0.18)"/>
+                        <rect x="${PL}" y="${y}" width="${fw}" height="${BH}" rx="${BH/2}" fill="${c}"/>
+                        <line x1="${tx}" y1="${y-1}" x2="${tx}" y2="${y+BH+1}" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+                        <text x="${W-PR+3}" y="${y+BH-1}" font-size="7" fill="${c}" font-family="system-ui,sans-serif">${actual}%</text>`;
+                };
+                const H = (BH+GAP)*3 - GAP;
+                return `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin-top:5px;">
+                    ${row(0, 'P', aP, tP)}${row(BH+GAP, 'C', aC, tC)}${row((BH+GAP)*2, 'F', aF, tF)}
+                </svg>`;
+            },
+
+            macroItemSVG(protein, carbs, fat) {
+                const pK = protein * 4, cK = carbs * 4, fK = fat * 9;
+                const total = pK + cK + fK;
+                if (total === 0) return '';
+                const aP = Math.round(pK / total * 100);
+                const aC = Math.round(cK / total * 100);
+                const aF = Math.round(fK / total * 100);
+                const tP = this.profile?.macro_protein_pct ?? 15;
+                const tC = this.profile?.macro_carbs_pct   ?? 55;
+                const tF = this.profile?.macro_fat_pct     ?? 30;
+                const col = (a, t) => Math.abs(a-t) <= 7 ? '#10b981' : Math.abs(a-t) <= 15 ? '#f59e0b' : '#ef4444';
+                const W = 200, BH = 4, GAP = 2, TW = W;
+                const row = (y, actual, target) => {
+                    const fw = +(Math.min(actual, 100) / 100 * TW).toFixed(1);
+                    const tx = +(target / 100 * TW).toFixed(1);
+                    const c = col(actual, target);
+                    return `<rect x="0" y="${y}" width="${TW}" height="${BH}" rx="${BH/2}" fill="rgba(128,128,128,0.15)"/>
+                        <rect x="0" y="${y}" width="${fw}" height="${BH}" rx="${BH/2}" fill="${c}"/>
+                        <line x1="${tx}" y1="${y-0.5}" x2="${tx}" y2="${y+BH+0.5}" stroke="white" stroke-width="1" opacity="0.8"/>`;
+                };
+                const H = (BH+GAP)*3 - GAP;
+                return `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin-top:4px;">
+                    ${row(0, aP, tP)}${row(BH+GAP, aC, tC)}${row((BH+GAP)*2, aF, tF)}
+                </svg>`;
+            },
+
             groupMealsByType(entries) {
                 const types = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'];
                 return types.map(type => ({
@@ -2844,18 +2913,25 @@
                 }
             },
 
-            renderInsight({ insight, mood }) {
-                const moodMap = {
-                    great:   { emoji: '🌟', bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.25)',  color: '#065f46' },
-                    good:    { emoji: '💪', bg: 'rgba(14,165,233,0.08)',  border: 'rgba(14,165,233,0.25)',  color: '#0c4a6e' },
-                    caution: { emoji: '⚡', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.30)', color: '#78350f' },
+            insightMoodMap() {
+                const dark = document.body.classList.contains('dark');
+                return {
+                    great:   { emoji: '🌟', bg: dark ? 'rgba(16,185,129,0.18)'  : 'rgba(16,185,129,0.08)',  border: dark ? 'rgba(16,185,129,0.4)'  : 'rgba(16,185,129,0.25)',  color: dark ? '#6ee7b7' : '#065f46' },
+                    good:    { emoji: '💪', bg: dark ? 'rgba(14,165,233,0.18)'  : 'rgba(14,165,233,0.08)',  border: dark ? 'rgba(14,165,233,0.4)'  : 'rgba(14,165,233,0.25)',  color: dark ? '#7dd3fc' : '#0c4a6e' },
+                    caution: { emoji: '⚡', bg: dark ? 'rgba(245,158,11,0.18)' : 'rgba(245,158,11,0.08)', border: dark ? 'rgba(245,158,11,0.4)' : 'rgba(245,158,11,0.30)', color: dark ? '#fcd34d' : '#78350f' },
                 };
-                const m = moodMap[mood] || moodMap.good;
-                document.getElementById('today-insight').innerHTML = `
-                    <div style="display: flex; gap: 12px; padding: 14px; background: ${m.bg}; border: 1px solid ${m.border}; border-radius: 10px;">
-                        <span style="font-size: 22px; flex-shrink: 0; line-height: 1.3;">${m.emoji}</span>
-                        <p style="font-size: 13px; line-height: 1.65; color: ${m.color}; font-weight: 500; margin: 0;">${insight}</p>
-                    </div>`;
+            },
+
+            insightHtml(emoji, bg, border, color, text) {
+                return `<div style="display:flex;gap:12px;padding:14px;background:${bg};border:1px solid ${border};border-radius:10px;">
+                    <span style="font-size:22px;flex-shrink:0;line-height:1.3;">${emoji}</span>
+                    <p style="font-size:13px;line-height:1.65;color:${color};font-weight:500;margin:0;">${text}</p>
+                </div>`;
+            },
+
+            renderInsight({ insight, mood }) {
+                const m = (this.insightMoodMap()[mood] || this.insightMoodMap().good);
+                document.getElementById('today-insight').innerHTML = this.insightHtml(m.emoji, m.bg, m.border, m.color, insight);
             },
 
             setHistoryPeriod(period) {
@@ -3092,17 +3168,8 @@
                     insight = `Across ${activeMonths} active month${activeMonths !== 1 ? 's' : ''} this year, your average is ${avgDaily} kcal/day against a ${target} kcal target. ${avgDaily <= target ? 'You\'re broadly tracking toward your goal — keep the consistency going.' : 'Your intake is running above target; focusing on the higher-calorie months will make the biggest difference.'}`;
                 }
 
-                const moodMap = {
-                    great:   { emoji: '🌟', bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.25)',  color: '#065f46' },
-                    good:    { emoji: '💪', bg: 'rgba(14,165,233,0.08)',  border: 'rgba(14,165,233,0.25)',  color: '#0c4a6e' },
-                    caution: { emoji: '⚡', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.30)', color: '#78350f' },
-                };
-                const m = moodMap[mood];
-                document.getElementById('history-insight').innerHTML = `
-                    <div style="display: flex; gap: 12px; padding: 14px; background: ${m.bg}; border: 1px solid ${m.border}; border-radius: 10px;">
-                        <span style="font-size: 22px; flex-shrink: 0; line-height: 1.3;">${m.emoji}</span>
-                        <p style="font-size: 13px; line-height: 1.65; color: ${m.color}; font-weight: 500; margin: 0;">${insight}</p>
-                    </div>`;
+                const m = (this.insightMoodMap()[mood] || this.insightMoodMap().good);
+                document.getElementById('history-insight').innerHTML = this.insightHtml(m.emoji, m.bg, m.border, m.color, insight);
             },
 
             async refreshWeight() {
@@ -3208,17 +3275,8 @@
                     insight = `Your weight has held steady at ${latest} kg over ${Math.round(daysDiff)} days. Keep logging consistently to spot emerging trends.`;
                 }
 
-                const moodMap = {
-                    great:   { emoji: '🌟', bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.25)',  color: '#065f46' },
-                    good:    { emoji: '💪', bg: 'rgba(14,165,233,0.08)',  border: 'rgba(14,165,233,0.25)',  color: '#0c4a6e' },
-                    caution: { emoji: '⚡', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.30)', color: '#78350f' },
-                };
-                const m = moodMap[mood];
-                el.innerHTML = `
-                    <div style="display: flex; gap: 12px; padding: 14px; background: ${m.bg}; border: 1px solid ${m.border}; border-radius: 10px;">
-                        <span style="font-size: 22px; flex-shrink: 0; line-height: 1.3;">${m.emoji}</span>
-                        <p style="font-size: 13px; line-height: 1.65; color: ${m.color}; font-weight: 500; margin: 0;">${insight}</p>
-                    </div>`;
+                const m = (this.insightMoodMap()[mood] || this.insightMoodMap().good);
+                el.innerHTML = this.insightHtml(m.emoji, m.bg, m.border, m.color, insight);
             },
 
             createChart(elementId, type, data, pluginOverrides) {

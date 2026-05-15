@@ -1175,8 +1175,13 @@
                 <div class="upload-form-row" style="align-items: flex-start;">
                     <label style="padding-top: 8px;">Image</label>
                     <div style="flex: 1;">
-                        <input type="file" id="upload-file" accept="image/*" onchange="app.previewImage()">
-                        <img id="upload-preview" style="max-width: 100%; margin-top: 8px; border-radius: 8px; display: none;">
+                        <div style="display:flex;gap:8px;margin-bottom:6px;">
+                            <button type="button" onclick="document.getElementById('upload-file').click()" class="btn btn-secondary" style="flex:1;font-size:13px;">🖼️ Gallery</button>
+                            <button type="button" onclick="document.getElementById('upload-camera').click()" class="btn btn-secondary" style="flex:1;font-size:13px;">📷 Camera</button>
+                        </div>
+                        <input type="file" id="upload-file"   accept="image/*"                    style="display:none;" onchange="app.previewImage('upload-file')">
+                        <input type="file" id="upload-camera" accept="image/*" capture="environment" style="display:none;" onchange="app.previewImage('upload-camera')">
+                        <img id="upload-preview" style="max-width: 100%; margin-top: 4px; border-radius: 8px; display: none;">
                     </div>
                 </div>
                 <button class="btn btn-primary" onclick="app.extractNutrition()">Extract Nutrition</button>
@@ -1584,9 +1589,17 @@
     </div>
 
     <script>
-        const APP_BUILD = 47;
+        const APP_BUILD = 48;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-15',
+                title: 'Camera capture for food scanning',
+                items: [
+                    'Scan Food Label now has two buttons — 🖼️ Gallery (choose existing photo) and 📷 Camera (shoot directly)',
+                    'Camera uses the rear-facing lens by default on mobile',
+                ]
+            },
             {
                 date: '2026-05-15',
                 title: 'Suggestions, security & fixes',
@@ -3805,6 +3818,13 @@
 
             closeModal(name) {
                 document.getElementById(`modal-${name}`).classList.remove('active');
+                if (name === 'upload') {
+                    document.getElementById('upload-file').value = '';
+                    document.getElementById('upload-camera').value = '';
+                    const preview = document.getElementById('upload-preview');
+                    if (preview) { preview.src = ''; preview.style.display = 'none'; }
+                    this._activeUploadInput = 'upload-file';
+                }
             },
 
             initDarkMode() {
@@ -4198,8 +4218,11 @@
                 this.openModal('weight-entry');
             },
 
-            previewImage() {
-                const file = document.getElementById('upload-file').files[0];
+            _activeUploadInput: 'upload-file',
+
+            previewImage(inputId = 'upload-file') {
+                this._activeUploadInput = inputId;
+                const file = document.getElementById(inputId).files[0];
                 if (file) {
                     const reader = new FileReader();
                     reader.onload = (e) => {
@@ -4211,9 +4234,9 @@
             },
 
             async extractNutrition() {
-                const file = document.getElementById('upload-file').files[0];
+                const file = document.getElementById(this._activeUploadInput || 'upload-file').files[0];
                 if (!file) {
-                    alert('Please select an image');
+                    alert('Please select or capture an image first');
                     return;
                 }
 

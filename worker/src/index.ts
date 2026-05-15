@@ -107,6 +107,10 @@ export default {
       return handleAdmin(request, env, corsHeaders);
     }
 
+    if (pathname.endsWith('/api/suggestions')) {
+      return handleSuggestions(request, env, corsHeaders);
+    }
+
     const openRouterKey = env.OPENROUTER_API_KEY;
     if (!openRouterKey) {
       return new Response(
@@ -202,6 +206,59 @@ export default {
     return new Response('Not found', { status: 404 });
   },
 };
+
+// ── Suggestions ───────────────────────────────────────────────────────────────
+
+async function handleSuggestions(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  const json = await request.json() as { token?: string; action?: string; sync_id?: string; body?: string; status?: string };
+  const { token, action } = json;
+  const ok = (data: object) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  const err = (msg: string, code = 400) => new Response(JSON.stringify({ error: msg }), { status: code, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+
+  if (!isValidToken(token)) return err('Unauthorised', 401);
+  const db = env.calorie_tracker_sync;
+
+  // List own suggestions
+  if (action === 'list') {
+    const result = await db.prepare('SELECT * FROM suggestions WHERE token=? ORDER BY updated_at DESC').bind(token).all();
+    return ok({ suggestions: result.results });
+  }
+
+  // Save (create or update) a suggestion
+  if (action === 'save') {
+    const text = json.body?.trim();
+    if (!text) return err('Empty suggestion');
+    const now = new Date().toISOString();
+    const id = json.sync_id || crypto.randomUUID();
+    await db.prepare(`
+      INSERT INTO suggestions (sync_id, token, body, status, created_at, updated_at)
+      VALUES (?, ?, ?, 'open', ?, ?)
+      ON CONFLICT(sync_id) DO UPDATE SET
+        body=excluded.body, updated_at=excluded.updated_at
+      WHERE token=excluded.token
+    `).bind(id, token, text, now, now).run();
+    return ok({ sync_id: id });
+  }
+
+  // Admin: list all suggestions
+  if (action === 'admin-list') {
+    if (token !== env.ADMIN_TOKEN) return err('Forbidden', 403);
+    const result = await db.prepare('SELECT * FROM suggestions ORDER BY updated_at DESC').all();
+    return ok({ suggestions: result.results });
+  }
+
+  // Admin: update status
+  if (action === 'admin-status') {
+    if (token !== env.ADMIN_TOKEN) return err('Forbidden', 403);
+    const validStatuses = ['open', 'reviewed', 'done'];
+    if (!json.sync_id || !validStatuses.includes(json.status ?? '')) return err('Invalid');
+    await db.prepare('UPDATE suggestions SET status=?, updated_at=? WHERE sync_id=?')
+      .bind(json.status, new Date().toISOString(), json.sync_id).run();
+    return ok({ ok: true });
+  }
+
+  return err('Unknown action');
+}
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 

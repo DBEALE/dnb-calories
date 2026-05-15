@@ -1074,6 +1074,17 @@
                 </div>
             </div>
 
+            <div class="screen" id="screen-suggestions">
+                <div class="card">
+                    <div class="card-title">Share a suggestion</div>
+                    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.5;">Ideas, bugs, or anything you'd like to see improved — all feedback is welcome.</p>
+                    <textarea id="suggestion-input" placeholder="Describe your idea…" style="width:100%;min-height:90px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:13px;font-family:inherit;resize:vertical;line-height:1.5;"></textarea>
+                    <button onclick="app.saveSuggestion()" class="btn btn-primary" style="width:100%;margin-top:10px;">Submit</button>
+                    <div id="suggestion-status" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;color:var(--accent-success);"></div>
+                </div>
+                <div id="suggestions-list"></div>
+            </div>
+
             <div class="screen" id="screen-admin">
                 <div id="admin-body" style="font-size:13px;">
                     <p style="color:var(--text-tertiary);text-align:center;padding:40px 0;">Loading…</p>
@@ -1098,6 +1109,10 @@
             <button class="nav-btn" onclick="app.switchScreen('changes')">
                 <span class="nav-icon">✨</span>
                 <span>What's New</span>
+            </button>
+            <button class="nav-btn" onclick="app.switchScreen('suggestions')">
+                <span class="nav-icon">💡</span>
+                <span>Suggest</span>
             </button>
             <button class="nav-btn" id="admin-nav-btn" onclick="app.switchScreen('admin')" style="display:none;">
                 <span class="nav-icon">🛠️</span>
@@ -1560,7 +1575,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 44;
+        const APP_BUILD = 45;
 
         const CHANGELOG = [
             {
@@ -2446,13 +2461,14 @@
                 document.getElementById('header-log-nav').style.display = isLog ? 'flex' : 'none';
                 document.getElementById('header-title-wrap').style.display = isLog ? 'none' : 'block';
                 if (!isLog) {
-                    const titles = { history: 'History', weight: 'Weight', settings: 'Settings', changes: 'What\'s New', admin: '🛠️ Admin' };
+                    const titles = { history: 'History', weight: 'Weight', settings: 'Settings', changes: 'What\'s New', suggestions: '💡 Suggestions', admin: '🛠️ Admin' };
                     document.getElementById('header-title').textContent = titles[screenName] || screenName;
                 }
 
                 if (screenName === 'history') this.refreshHistory();
                 if (screenName === 'weight') this.refreshWeight();
                 if (screenName === 'changes') this.renderChangelog();
+                if (screenName === 'suggestions') this.loadSuggestions();
                 if (screenName === 'admin') this.loadAdminScreen();
             },
 
@@ -2842,6 +2858,100 @@
             macroDiscrepancySVG(p, c, f) { return this.macroThumbSVG(p, c, f, 20); },
             macroItemSVG(p, c, f)        { return this.macroThumbSVG(p, c, f, 32); },
 
+            // ── Suggestions ──────────────────────────────────────────────
+
+            async loadSuggestions() {
+                const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
+                const listEl = document.getElementById('suggestions-list');
+                listEl.innerHTML = '<p style="color:var(--text-tertiary);text-align:center;padding:20px 0;font-size:13px;">Loading…</p>';
+                try {
+                    const resp = await fetch(`${WORKER}/api/suggestions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: this.getSyncToken(), action: 'list' }),
+                    });
+                    const data = await resp.json();
+                    this.renderSuggestionsList(data.suggestions || []);
+                } catch {
+                    listEl.innerHTML = '<p style="color:var(--accent-danger);text-align:center;padding:20px 0;font-size:13px;">Failed to load suggestions.</p>';
+                }
+            },
+
+            renderSuggestionsList(suggestions) {
+                const listEl = document.getElementById('suggestions-list');
+                if (!suggestions.length) {
+                    listEl.innerHTML = '<p style="color:var(--text-tertiary);text-align:center;padding:20px 0;font-size:13px;">No suggestions yet — be the first!</p>';
+                    return;
+                }
+                const statusColor = s => ({ open: 'var(--text-tertiary)', reviewed: '#f59e0b', done: '#10b981' }[s] || 'var(--text-tertiary)');
+                const statusLabel = s => ({ open: 'Submitted', reviewed: '👀 Reviewed', done: '✓ Done' }[s] || s);
+                listEl.innerHTML = suggestions.map(s => `
+                    <div class="card" id="suggestion-card-${s.sync_id}" style="margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;color:${statusColor(s.status)};font-weight:600;">${statusLabel(s.status)}</span>
+                            <span style="font-size:11px;color:var(--text-tertiary);">${s.updated_at.slice(0,10)}</span>
+                        </div>
+                        <div id="suggestion-text-${s.sync_id}" style="font-size:13px;color:var(--text-primary);line-height:1.5;">${this.esc(s.body)}</div>
+                        ${s.status === 'open' ? `
+                        <button onclick="app.editSuggestion('${s.sync_id}')" style="margin-top:8px;background:none;border:none;cursor:pointer;font-size:12px;color:var(--accent-info);padding:0;font-weight:600;">✏️ Edit</button>` : ''}
+                    </div>`).join('');
+            },
+
+            editSuggestion(syncId) {
+                const textEl = document.getElementById(`suggestion-text-${syncId}`);
+                const current = textEl.textContent.trim();
+                const card = document.getElementById(`suggestion-card-${syncId}`);
+                card.innerHTML = `
+                    <textarea id="edit-suggestion-${syncId}" style="width:100%;min-height:80px;padding:10px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:13px;font-family:inherit;resize:vertical;line-height:1.5;">${this.esc(current)}</textarea>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button onclick="app.updateSuggestion('${syncId}')" class="btn btn-primary" style="flex:1;">Save</button>
+                        <button onclick="app.loadSuggestions()" class="btn btn-secondary" style="flex:1;">Cancel</button>
+                    </div>`;
+                document.getElementById(`edit-suggestion-${syncId}`).focus();
+            },
+
+            async saveSuggestion() {
+                const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
+                const input = document.getElementById('suggestion-input');
+                const statusEl = document.getElementById('suggestion-status');
+                const text = input.value.trim();
+                if (!text) { statusEl.textContent = 'Please enter a suggestion first.'; statusEl.style.color = 'var(--accent-danger)'; return; }
+                statusEl.textContent = 'Submitting…';
+                statusEl.style.color = 'var(--text-tertiary)';
+                try {
+                    const resp = await fetch(`${WORKER}/api/suggestions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: this.getSyncToken(), action: 'save', body: text }),
+                    });
+                    if (!resp.ok) throw new Error();
+                    input.value = '';
+                    statusEl.textContent = '✓ Suggestion submitted — thank you!';
+                    statusEl.style.color = 'var(--accent-success)';
+                    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+                    this.loadSuggestions();
+                } catch {
+                    statusEl.textContent = 'Failed to submit. Please try again.';
+                    statusEl.style.color = 'var(--accent-danger)';
+                }
+            },
+
+            async updateSuggestion(syncId) {
+                const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
+                const text = document.getElementById(`edit-suggestion-${syncId}`)?.value.trim();
+                if (!text) return;
+                try {
+                    await fetch(`${WORKER}/api/suggestions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: this.getSyncToken(), action: 'save', sync_id: syncId, body: text }),
+                    });
+                    this.loadSuggestions();
+                } catch {
+                    alert('Failed to update. Please try again.');
+                }
+            },
+
             // ── Admin ────────────────────────────────────────────────────
 
             _adminTaps: 0,
@@ -2861,18 +2971,20 @@
 
             async loadAdminScreen() {
                 const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
+                const token = this.getSyncToken();
                 document.getElementById('admin-body').innerHTML = '<p style="color:var(--text-tertiary);text-align:center;padding:40px 0;">Loading…</p>';
                 try {
-                    const resp = await fetch(`${WORKER}/api/admin`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token: this.getSyncToken() }),
-                    });
+                    const [resp, suggResp] = await Promise.all([
+                        fetch(`${WORKER}/api/admin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }),
+                        fetch(`${WORKER}/api/suggestions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, action: 'admin-list' }) }),
+                    ]);
                     if (resp.status === 403) {
                         document.getElementById('admin-body').innerHTML = '<p style="color:var(--accent-danger);text-align:center;padding:24px 0;">Not authorised.</p>';
                         return;
                     }
                     const d = await resp.json();
+                    const suggData = suggResp.ok ? await suggResp.json() : { suggestions: [] };
+                    const allSuggestions = suggData.suggestions || [];
                     const epLabel = e => ({ 'extract-nutrition': '📸 Scan', 'daily-insight': '💡 Insight', 'calorie-target': '🎯 Cal Target' }[e] || e);
                     const shortModel = m => (m || '—').replace('deepseek/', '').replace('openai/', '').replace(':free', '').replace('google/', '');
                     const usageTable = (rows) => {
@@ -2913,7 +3025,7 @@
                             <div class="card-title" style="font-size:11px;">AI CALLS — THIS MONTH</div>
                             ${usageTable(d.usageMonth)}
                         </div>
-                        <div class="card">
+                        <div class="card" style="margin-bottom:10px;">
                             <div class="card-title" style="font-size:11px;">RECENT ACTIVITY</div>
                             ${d.recent.map(r => `
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:11px;">
@@ -2923,6 +3035,27 @@
                                 <span style="color:${r.success ? 'var(--accent-success)' : 'var(--accent-danger)'};margin-left:8px;flex-shrink:0;">${r.success ? '✓' : '✗'}</span>
                                 <span style="color:var(--text-tertiary);margin-left:8px;flex-shrink:0;">${r.ts.slice(11,16)}</span>
                             </div>`).join('')}
+                        </div>
+                        <div class="card">
+                            <div class="card-title" style="font-size:11px;">SUGGESTIONS (${allSuggestions.length})</div>
+                            ${allSuggestions.length === 0
+                                ? '<p style="color:var(--text-tertiary);font-size:12px;">No suggestions yet.</p>'
+                                : allSuggestions.map(s => {
+                                    const sc = { open: '#6b7280', reviewed: '#f59e0b', done: '#10b981' }[s.status] || '#6b7280';
+                                    return `<div style="padding:8px 0;border-bottom:1px solid var(--border-color);">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                                            <span style="font-family:monospace;font-size:10px;color:var(--text-tertiary);">${s.token.slice(0,8)}…</span>
+                                            <div style="display:flex;align-items:center;gap:8px;">
+                                                <select onchange="app.adminUpdateSuggestionStatus('${s.sync_id}', this.value)" style="font-size:10px;padding:2px 4px;border-radius:4px;border:1px solid var(--border-color);background:var(--bg-secondary);color:${sc};">
+                                                    <option value="open" ${s.status==='open'?'selected':''}>Open</option>
+                                                    <option value="reviewed" ${s.status==='reviewed'?'selected':''}>Reviewed</option>
+                                                    <option value="done" ${s.status==='done'?'selected':''}>Done</option>
+                                                </select>
+                                                <span style="font-size:10px;color:var(--text-tertiary);">${s.updated_at.slice(0,10)}</span>
+                                            </div>
+                                        </div>
+                                        <div style="font-size:12px;color:var(--text-primary);line-height:1.5;">${this.esc(s.body)}</div>
+                                    </div>`;}).join('')}
                         </div>`;
                 } catch (e) {
                     document.getElementById('admin-body').innerHTML = '<p style="color:var(--accent-danger);text-align:center;padding:40px 0;">Failed to load.</p>';
@@ -3058,6 +3191,15 @@
             copySyncKey() {
                 const key = this.getSyncToken();
                 navigator.clipboard.writeText(key).then(() => alert('Sync key copied to clipboard.')).catch(() => prompt('Copy this sync key:', key));
+            },
+
+            async adminUpdateSuggestionStatus(syncId, status) {
+                const WORKER = 'https://calorie-extractor.dbeale75.workers.dev';
+                await fetch(`${WORKER}/api/suggestions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: this.getSyncToken(), action: 'admin-status', sync_id: syncId, status }),
+                }).catch(() => {});
             },
 
             importSyncKey() {

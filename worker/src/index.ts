@@ -67,6 +67,8 @@ interface InsightRequest {
   rda_carbs: number;
   rda_fat: number;
   rda_fiber: number;
+  current_hour?: number;
+  is_today?: boolean;
 }
 
 export default {
@@ -630,8 +632,22 @@ async function callInsight(data: InsightRequest, apiKey: string): Promise<{ insi
   const pct = (v: number, rda: number) => rda > 0 ? Math.round(v / rda * 100) : 0;
   const remaining = Math.max(0, data.target_kcal - data.consumed);
 
+  // Work out how far through the eating day we are (7am–10pm = 15 hrs)
+  const hour = data.is_today ? (data.current_hour ?? 23) : 23;
+  const dayFraction = Math.min(1, Math.max(0, (hour - 7) / 15));
+  const expectedByNow = Math.round(data.target_kcal * dayFraction);
+  const isPartialDay = data.is_today && hour < 21;
+
   const proteinStatus = pct(data.protein, data.rda_protein) >= 80 ? 'strong' : pct(data.protein, data.rda_protein) >= 50 ? 'moderate' : 'low';
-  const calStatus = pct(data.consumed, data.target_kcal) > 100 ? 'over target' : pct(data.consumed, data.target_kcal) >= 80 ? 'close to target' : 'well under target';
+  const calStatus = data.consumed > data.target_kcal
+    ? 'over daily target'
+    : isPartialDay
+      ? data.consumed > expectedByNow * 1.2 ? 'ahead of pace' : data.consumed < expectedByNow * 0.7 ? 'behind pace (day not over)' : 'on pace for the day'
+      : pct(data.consumed, data.target_kcal) >= 80 ? 'close to target' : 'under target';
+
+  const timeContext = isPartialDay
+    ? `It is currently ${hour}:00. The user has NOT finished eating for the day — do NOT say they are under their daily target. Instead comment on their pace (they have logged ${data.consumed} kcal, expected ~${expectedByNow} kcal by this time of day based on a ${data.target_kcal} kcal target).`
+    : `This is a end-of-day or historical summary. Assess intake against the full daily target.`;
 
   const prompt = `You are a nutrition coach writing a daily check-in for a specific person. Write exactly 2-3 sentences. Every sentence must reference at least one actual number from the data below — never speak in generalities.
 
@@ -641,12 +657,13 @@ STRICT RULES:
 - You MUST mention at least two specific nutrients by name with their actual values
 - Vary your opening — do not start with "You"
 - If protein is low, say so clearly. If calories are high, say so clearly. Be honest but constructive.
+- ${timeContext}
 
 Person: ${data.sex}, age ${data.age}, ${data.activity_level} activity, ${data.current_weight_kg}kg → target ${data.target_weight_kg}kg
 Calorie target: ${data.target_kcal} kcal/day (maintenance ${data.maintenance_kcal} kcal)
 
-Today's intake:
-- Calories: ${data.consumed} kcal (${pct(data.consumed, data.target_kcal)}% of target) — ${calStatus}, ${remaining} kcal remaining
+Today's intake so far:
+- Calories: ${data.consumed} kcal — ${calStatus}${isPartialDay ? ` (${remaining} kcal remaining in budget)` : ''}
 - Protein: ${data.protein}g / ${data.rda_protein}g RDA (${pct(data.protein, data.rda_protein)}%) — ${proteinStatus}
 - Carbs: ${data.carbs}g / ${data.rda_carbs}g RDA (${pct(data.carbs, data.rda_carbs)}%)
 - Fat: ${data.fat}g / ${data.rda_fat}g RDA (${pct(data.fat, data.rda_fat)}%)
@@ -656,7 +673,7 @@ Today's intake:
 Reply with ONLY this JSON and nothing else:
 {"insight": "2-3 sentences referencing real numbers", "mood": "great|good|caution"}
 
-mood = "great" if calories on track AND protein >= 80% RDA; "caution" if calories over target OR protein < 40% RDA; otherwise "good".`;
+mood = "great" if on pace or better AND protein >= 80% RDA; "caution" if over daily target OR protein < 40% RDA; otherwise "good".`;
 
   const models = [
     'deepseek/deepseek-v4-flash:free',
@@ -727,24 +744,39 @@ function templateInsight(data: InsightRequest): { insight: string; mood: string 
   const parts: string[] = [];
   let mood = 'good';
 
+  const hour = data.is_today ? (data.current_hour ?? 23) : 23;
+  const isPartialDay = data.is_today && hour < 21;
+  const dayFraction = Math.min(1, Math.max(0, (hour - 7) / 15));
+  const expectedByNow = Math.round(data.target_kcal * dayFraction);
+
   if (calPct > 110) {
     mood = 'caution';
-    parts.push(`You've consumed ${data.consumed} kcal, which is ${calPct - 100}% over your ${data.target_kcal} kcal target.`);
+    parts.push(`You've consumed ${data.consumed} kcal — ${calPct - 100}% over your ${data.target_kcal} kcal target.`);
+  } else if (isPartialDay) {
+    if (data.consumed > expectedByNow * 1.2) {
+      parts.push(`At ${hour}:00, you've logged ${data.consumed} kcal — slightly ahead of the ~${expectedByNow} kcal pace for this time of day, with ${remaining} kcal remaining in your budget.`);
+    } else if (data.consumed < expectedByNow * 0.7) {
+      parts.push(`You've logged ${data.consumed} kcal so far — a little behind the ~${expectedByNow} kcal expected by ${hour}:00, though there's plenty of the day left.`);
+      mood = 'good';
+    } else {
+      parts.push(`At ${hour}:00, ${data.consumed} kcal logged is right on pace against your ${data.target_kcal} kcal daily target.`);
+      mood = 'great';
+    }
   } else if (calPct >= 80) {
     parts.push(`You've consumed ${data.consumed} kcal — ${calPct}% of your ${data.target_kcal} kcal target, with ${remaining} kcal remaining.`);
     mood = 'great';
   } else {
-    parts.push(`You've logged ${data.consumed} kcal so far, leaving ${remaining} kcal of your ${data.target_kcal} kcal daily target.`);
+    parts.push(`You've logged ${data.consumed} kcal today against a ${data.target_kcal} kcal target, with ${remaining} kcal still available.`);
   }
 
   if (protPct >= 80) {
-    parts.push(`Protein is looking strong at ${data.protein}g (${protPct}% of your ${data.rda_protein}g RDA).`);
+    parts.push(`Protein is strong at ${data.protein}g (${protPct}% of your ${data.rda_protein}g RDA).`);
     if (mood !== 'caution') mood = 'great';
   } else if (protPct < 40) {
-    parts.push(`Protein is low at ${data.protein}g — try to work toward your ${data.rda_protein}g RDA throughout the day.`);
+    parts.push(`Protein is low at ${data.protein}g — aim to build toward your ${data.rda_protein}g RDA through the rest of the day.`);
     if (mood !== 'caution') mood = 'good';
   } else {
-    parts.push(`Protein is at ${data.protein}g (${protPct}% of your ${data.rda_protein}g RDA) — keep building toward your target.`);
+    parts.push(`Protein is at ${data.protein}g (${protPct}% of your ${data.rda_protein}g RDA) — keep building.`);
   }
 
   return { insight: parts.join(' '), mood };

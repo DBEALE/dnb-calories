@@ -1558,7 +1558,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 40;
+        const APP_BUILD = 41;
 
         const CHANGELOG = [
             {
@@ -3225,6 +3225,8 @@
                             rda_carbs: rda.carbs,
                             rda_fat: rda.fat,
                             rda_fiber: rda.fiber,
+                            current_hour: new Date().getHours(),
+                            is_today: date === this.getCurrentDateString(),
                         })
                     });
                     const data = await response.json();

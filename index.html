@@ -1584,9 +1584,22 @@
     </div>
 
     <script>
-        const APP_BUILD = 46;
+        const APP_BUILD = 47;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-15',
+                title: 'Suggestions, security & fixes',
+                items: [
+                    '💡 Suggest tab — submit ideas and feedback, view and edit your own suggestions',
+                    'Admin panel shows all user suggestions with Open / Reviewed / Done status control',
+                    'CORS restricted to known domains — worker no longer accepts requests from anywhere',
+                    'AI endpoints now require a valid sync token — prevents anonymous API abuse',
+                    'HTML escaping on all user-generated content — prevents XSS via synced data',
+                    'Fixed horizontal scroll/drag on mobile — page now fits all screen widths reliably',
+                    'Time-aware AI insight — no longer says "under target" when the day isn\'t finished',
+                ]
+            },
             {
                 date: '2026-05-14',
                 title: 'Offline-first sync + Service Worker',

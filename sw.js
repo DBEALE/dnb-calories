@@ -1,11 +1,11 @@
-const CACHE = 'calorie-tracker-v2';
+const CACHE = 'calorie-tracker-v3';
 
 const PRECACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  './',
+  './index.html',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js',
 ];
 
@@ -56,7 +56,7 @@ self.addEventListener('fetch', event => {
           caches.open(CACHE).then(c => c.put(request, res.clone()));
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }

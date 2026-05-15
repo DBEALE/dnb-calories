@@ -1558,7 +1558,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 41;
+        const APP_BUILD = 42;
 
         const CHANGELOG = [
             {
@@ -2545,13 +2545,13 @@
                             e.fibre_g   ? `Fi ${Math.round(e.fibre_g)}g`  : '',
                             e.salt_g    ? `Sa ${Math.round(e.salt_g * 10) / 10}g` : '',
                         ].filter(Boolean).join('  ·  ');
-                        const subtitle = [e.brand, e.serving_description].filter(Boolean).join(' · ');
+                        const subtitle = [e.brand, e.serving_description].filter(Boolean).map(s => this.esc(s)).join(' · ');
                         return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color);">
                             <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
                                 ${this.macroItemSVG(e.protein_g || 0, e.carbs_g || 0, e.fat_g || 0)}
                                 <div style="flex: 1; min-width: 0;">
-                                    <div style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${e.food_name}</div>
+                                    <div style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this.esc(e.food_name)}</div>
                                     ${subtitle ? `<div style="font-size: 11px; color: var(--text-tertiary); margin-top: 1px;">${subtitle}</div>` : ''}
                                     ${macros ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; letter-spacing: 0.2px;">${macros}</div>` : ''}
                                 </div>
@@ -3080,6 +3080,11 @@
             },
 
             // ─────────────────────────────────────────────────────────────
+
+            esc(str) {
+                if (str == null) return '';
+                return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            },
 
             groupMealsByType(entries) {
                 const types = ['breakfast', 'lunch', 'dinner', 'snack', 'drink'];
@@ -3755,11 +3760,11 @@
                         return `
                         <div style="display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-color);">
                             <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${fav.food_name}</div>
+                                <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${this.esc(fav.food_name)}</div>
                                 <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
                                     <strong>${fav.calories} kcal</strong>${macros ? ' &nbsp;·&nbsp; ' + macros : ''}
                                 </div>
-                                ${fav.brand ? `<div style="font-size: 11px; color: var(--text-tertiary);">${fav.brand}</div>` : ''}
+                                ${fav.brand ? `<div style="font-size: 11px; color: var(--text-tertiary);">${this.esc(fav.brand)}</div>` : ''}
                             </div>
                             <button onclick="app.logFavourite(${fav.id})" style="background: var(--accent-success); color: white; border: none; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;">Log</button>
                             <button onclick="app.openEditFavourite(${fav.id})" style="background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-tertiary); flex-shrink: 0; padding: 0 2px;">✏️</button>

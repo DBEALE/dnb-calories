@@ -28,11 +28,23 @@ interface ExtractResponse {
   warnings: string[];
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+const ALLOWED_ORIGINS = new Set([
+  'https://fitnesshealth.app',
+  'https://www.fitnesshealth.app',
+  'https://dnb-calories.pages.dev',
+  'https://dbeale.github.io',
+]);
+
+function getCors(request: Request) {
+  const origin = request.headers.get('Origin') ?? '';
+  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : 'https://fitnesshealth.app';
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin',
+  };
+}
 
 interface SyncRequest {
   token: string;
@@ -73,6 +85,8 @@ interface InsightRequest {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const corsHeaders = getCors(request);
+
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
@@ -86,11 +100,11 @@ export default {
 
     // Sync endpoint — does not require OPENROUTER_API_KEY
     if (pathname.endsWith('/api/sync')) {
-      return handleSync(request, env);
+      return handleSync(request, env, corsHeaders);
     }
 
     if (pathname.endsWith('/api/admin')) {
-      return handleAdmin(request, env);
+      return handleAdmin(request, env, corsHeaders);
     }
 
     const openRouterKey = env.OPENROUTER_API_KEY;
@@ -107,6 +121,9 @@ export default {
       try {
         const body: ExtractRequest & { token?: string } = await request.json();
         token = body.token || '';
+        if (!isValidToken(token)) {
+          return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        }
         if (!body.image_base64 || !body.filename) {
           return new Response(
             JSON.stringify({ error: 'Missing image_base64 or filename' }),
@@ -136,6 +153,9 @@ export default {
       try {
         const body: InsightRequest & { token?: string } = await request.json();
         token = body.token || '';
+        if (!isValidToken(token)) {
+          return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        }
         const result = await callInsight(body, openRouterKey);
         return new Response(JSON.stringify(result), {
           status: 200,
@@ -159,6 +179,9 @@ export default {
       try {
         const body = await request.json() as any;
         token = body.token || '';
+        if (!isValidToken(token)) {
+          return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        }
         const result = await callCalorieTarget(body, openRouterKey);
         return new Response(JSON.stringify(result), {
           status: 200,
@@ -182,7 +205,7 @@ export default {
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
-async function handleAdmin(request: Request, env: Env): Promise<Response> {
+async function handleAdmin(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   const json = await request.json() as { token?: string };
   if (!env.ADMIN_TOKEN || json.token !== env.ADMIN_TOKEN) {
     return new Response(JSON.stringify({ error: 'Forbidden' }), {
@@ -217,6 +240,10 @@ async function handleAdmin(request: Request, env: Env): Promise<Response> {
 
 // ── Usage logging ────────────────────────────────────────────────────────────
 
+function isValidToken(token: unknown): token is string {
+  return typeof token === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(token);
+}
+
 function logUsage(ctx: ExecutionContext, env: Env, token: string, endpoint: string, model: string, success: boolean): void {
   if (!env.calorie_tracker_sync || !token) return;
   ctx.waitUntil(
@@ -230,7 +257,7 @@ function logUsage(ctx: ExecutionContext, env: Env, token: string, endpoint: stri
 
 // ── Sync ─────────────────────────────────────────────────────────────────────
 
-async function handleSync(request: Request, env: Env): Promise<Response> {
+async function handleSync(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   if (!env.calorie_tracker_sync) {
     return new Response(JSON.stringify({ error: 'Sync not configured' }), {
       status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders },

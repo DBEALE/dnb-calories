@@ -1,3 +1,4 @@
+.git/
 node_modules/
 worker/
 .claude/
@@ -5,6 +6,7 @@ worker/
 .vscode/
 *.md
 *.jsonc
-*.json
+package.json
+package-lock.json
 .gitignore
 .assetsignore

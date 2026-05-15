@@ -868,48 +868,40 @@
                     </div>
                 </div>
 
-                <!-- Insight -->
+                <!-- Weight chart -->
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <div class="card-title" style="margin:0;">Weight</div>
+                        <button class="btn btn-primary btn-small" onclick="app.openWeightEntry()" style="width:auto;margin:0;">+ Log Weight</button>
+                    </div>
+                    <div class="chart-container" id="weight-chart-wrapper">
+                        <canvas id="weight-chart"></canvas>
+                    </div>
+                    <div id="weight-chart-empty" style="display:none;text-align:center;padding:24px 0;">
+                        <div style="font-size:36px;margin-bottom:8px;">⚖️</div>
+                        <div style="font-size:13px;color:var(--text-secondary);">No weight entries for this period.</div>
+                    </div>
+                </div>
+
+                <div class="kpi-grid" style="grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                    <div class="kpi-card" style="padding:12px;">
+                        <div class="kpi-label" style="font-size:10px;">Current</div>
+                        <div><span class="kpi-value" id="weight-current" style="font-size:20px;">—</span><span class="kpi-unit">kg</span></div>
+                    </div>
+                    <div class="kpi-card" style="padding:12px;">
+                        <div class="kpi-label" style="font-size:10px;">Period change</div>
+                        <div><span class="kpi-value" id="weight-period-change" style="font-size:20px;">—</span><span class="kpi-unit">kg</span></div>
+                    </div>
+                    <div class="kpi-card" style="padding:12px;">
+                        <div class="kpi-label" style="font-size:10px;">To target</div>
+                        <div><span class="kpi-value" id="weight-to-target" style="font-size:20px;">—</span><span class="kpi-unit">kg</span></div>
+                    </div>
+                </div>
+
+                <!-- Calorie insight -->
                 <div class="card">
                     <div class="card-title">Insight</div>
                     <div id="history-insight"><p style="color: var(--text-secondary); font-size: 12px;">No data logged for this period.</p></div>
-                </div>
-            </div>
-
-            <!-- Weight Screen -->
-            <div class="screen" id="screen-weight">
-                <div class="card">
-                    <div class="card-title">Weight Tracking</div>
-                    <div style="margin-bottom: 16px;">
-                        <button class="btn btn-primary btn-small" onclick="app.openWeightEntry()" style="width: auto; margin: 0;">+ Log Weight</button>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="weight-chart"></canvas>
-                    </div>
-                </div>
-
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-label">Current</div>
-                        <div><span class="kpi-value" id="weight-current">—</span><span class="kpi-unit">kg</span></div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Target</div>
-                        <div><span class="kpi-value" id="weight-target">—</span><span class="kpi-unit">kg</span></div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">Progress</div>
-                    <div id="weight-progress" style="font-size: 14px; color: var(--text-secondary);">
-                        <p style="margin-bottom: 8px;"><strong>7-day change:</strong> <span id="weight-7day">—</span></p>
-                        <p style="margin-bottom: 8px;"><strong>30-day change:</strong> <span id="weight-30day">—</span></p>
-                        <p><strong>To target:</strong> <span id="weight-to-target">—</span></p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">Insight</div>
-                    <div id="weight-insight"><p style="color: var(--text-secondary); font-size: 12px;">Log at least 2 weight entries to see your trend.</p></div>
                 </div>
             </div>
 
@@ -1083,6 +1075,27 @@
                 </div>
             </div>
 
+            <div class="screen" id="screen-macros">
+                <!-- Macro balance (P/C/F) -->
+                <div class="card">
+                    <div class="card-title">Macro Balance <span style="font-size:11px;color:var(--text-tertiary);font-weight:400;">— tap to see contributors</span></div>
+                    <div id="macros-balance-content"><p style="color:var(--text-tertiary);font-size:12px;">Loading…</p></div>
+                </div>
+                <!-- Nutrition vs RDA -->
+                <div class="card">
+                    <div class="card-title">Nutrition vs RDA <span style="font-size:11px;color:var(--text-tertiary);font-weight:400;">— tap to see contributors</span></div>
+                    <div id="macros-rda-content"><p style="color:var(--text-tertiary);font-size:12px;">Loading…</p></div>
+                </div>
+                <!-- Drill-down panel -->
+                <div class="card" id="macros-detail-panel" style="display:none;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <div class="card-title" style="margin:0;" id="macros-detail-title">Contributors</div>
+                        <button onclick="document.getElementById('macros-detail-panel').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-tertiary);padding:0 4px;">✕</button>
+                    </div>
+                    <div id="macros-detail-list"></div>
+                </div>
+            </div>
+
             <div class="screen" id="screen-suggestions">
                 <div class="card">
                     <div class="card-title">Share a suggestion</div>
@@ -1107,13 +1120,13 @@
                 <span class="nav-icon">📊</span>
                 <span>Log</span>
             </button>
+            <button class="nav-btn" onclick="app.switchScreen('macros')">
+                <span class="nav-icon">🥗</span>
+                <span>Macros</span>
+            </button>
             <button class="nav-btn" onclick="app.switchScreen('history')">
                 <span class="nav-icon">📈</span>
                 <span>History</span>
-            </button>
-            <button class="nav-btn" onclick="app.switchScreen('weight')">
-                <span class="nav-icon">⚖️</span>
-                <span>Weight</span>
             </button>
             <button class="nav-btn" onclick="app.switchScreen('changes')">
                 <span class="nav-icon">✨</span>
@@ -1589,9 +1602,38 @@
     </div>
 
     <script>
-        const APP_BUILD = 48;
+        const APP_BUILD = 49;
 
         const CHANGELOG = [
+            {
+                date: '2026-05-15',
+                title: 'Macros tab',
+                items: [
+                    'New 🥗 Macros tab with Week / Month / Year selector',
+                    'Macro Balance — P/C/F deviation bars showing how your split compares to targets',
+                    'Nutrition vs RDA — five rings (Protein, Carbs, Fat, Fibre, Salt) scaled to logged days',
+                    'Tap any bar or ring to see every meal that contributed to it, sorted highest to lowest',
+                    'A relative bar shows each meal\'s share of the total at a glance',
+                ]
+            },
+            {
+                date: '2026-05-15',
+                title: 'Smarter history averages & insight',
+                items: [
+                    'Averages and deficit estimates now only count days you actually logged — unlogged days are excluded',
+                    'Year view correctly counts individual logged days, not months, for its average',
+                    'Insight now states how many days were logged vs total period and notes when coverage is partial',
+                ]
+            },
+            {
+                date: '2026-05-15',
+                title: 'History & Weight merged into one tab',
+                items: [
+                    'History and Weight are now a single tab — Week / Month / Year controls both calorie and weight charts',
+                    'Weight chart filters to the selected period; period-change KPI shows gain/loss over that window',
+                    'Log Weight button lives in the combined screen alongside the charts',
+                ]
+            },
             {
                 date: '2026-05-15',
                 title: 'Camera capture for food scanning',
@@ -2039,6 +2081,7 @@
             lastMealType: null,
             lastMealDate: null,
             historyPeriod: 'week',
+            macrosPeriod: 'week',
             previousScreen: 'today',
             _wizardTargetCache: {},
             weightChange7d: null,
@@ -2117,7 +2160,11 @@
                 if (date > today) return;
                 this.selectedTodayDate = date;
                 this.updateDate();
-                this.refreshToday();
+                if (this.currentScreen === 'macros') {
+                    this.refreshMacros();
+                } else {
+                    this.refreshToday();
+                }
             },
 
             shiftViewDate(delta) {
@@ -2492,17 +2539,17 @@
                 document.querySelector('.content').scrollTop = 0;
                 this.currentScreen = screenName;
 
-                const isLog = screenName === 'today';
+                const isLog = screenName === 'today' || screenName === 'macros';
                 document.getElementById('header-log-nav').style.display = isLog ? 'flex' : 'none';
                 document.getElementById('header-title-wrap').style.display = isLog ? 'none' : 'block';
                 if (!isLog) {
-                    const titles = { history: 'History', weight: 'Weight', settings: 'Settings', changes: 'What\'s New', suggestions: '💡 Suggestions', admin: '🛠️ Admin' };
+                    const titles = { history: 'History', macros: 'Macros', settings: 'Settings', changes: 'What\'s New', suggestions: '💡 Suggestions', admin: '🛠️ Admin' };
                     document.getElementById('header-title').textContent = titles[screenName] || screenName;
                 }
 
-                if (screenName === 'history') this.refreshHistory();
-                if (screenName === 'weight') this.refreshWeight();
+                if (screenName === 'history') { this.refreshHistory(); this.refreshWeight(); }
                 if (screenName === 'changes') this.renderChangelog();
+                if (screenName === 'macros') this.refreshMacros();
                 if (screenName === 'suggestions') this.loadSuggestions();
                 if (screenName === 'admin') this.loadAdminScreen();
             },
@@ -2510,7 +2557,6 @@
             async refreshAll() {
                 this.refreshToday();
                 this.refreshHistory();
-                this.refreshWeight();
             },
 
             async getFoodEntries(date) {
@@ -2812,7 +2858,7 @@
                     </div>`;
 
                 // ── 3. RDA mini rings — 5 equal ────────────────────────
-                const miniRing = (label, g, rdaG, color, decimals = 0) => {
+                const miniRing = (label, g, rdaG, color, decimals = 0, macroKey = '') => {
                     const mr = 22, msw = 6, sz = 54;
                     const mc = +(2 * Math.PI * mr).toFixed(2);
                     const mpct = rdaG > 0 ? Math.min(g / rdaG, 1) : 0;
@@ -2820,8 +2866,9 @@
                     const mColor = mpct >= 1 ? '#ef4444' : color;
                     const pctLabel = rdaG > 0 ? Math.round(g / rdaG * 100) + '%' : '—';
                     const valLabel = decimals > 0 ? g.toFixed(decimals) : Math.round(g);
+                    const clickHandler = macroKey ? `onclick="app.switchScreen('macros');setTimeout(()=>app.showMacroDetail('${macroKey}'),150);" style="cursor:pointer;"` : '';
                     return `
-                        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
+                        <div ${clickHandler} style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;">
                             <div style="position:relative;width:${sz}px;height:${sz}px;">
                                 <svg viewBox="0 0 ${sz} ${sz}" style="width:${sz}px;height:${sz}px;">
                                     <circle cx="${sz/2}" cy="${sz/2}" r="${mr}" fill="none" stroke="var(--bg-secondary)" stroke-width="${msw}"/>
@@ -2842,11 +2889,11 @@
                     <div style="border-top:1px solid var(--border-color);margin-top:10px;padding-top:12px;">
                         <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);letter-spacing:0.7px;text-align:center;margin-bottom:10px;">NUTRITION vs RDA</div>
                         <div style="display:flex;gap:4px;justify-content:space-around;">
-                            ${miniRing('Protein', protein, rda.protein, '#f59e0b')}
-                            ${miniRing('Carbs',   carbs,   rda.carbs,   '#0ea5e9')}
-                            ${miniRing('Fat',     fat,     rda.fat,     '#8b5cf6')}
-                            ${miniRing('Fibre',   fiber,   rda.fiber,   '#10b981')}
-                            ${miniRing('Salt',    salt,    rda.salt,    '#06b6d4', 1)}
+                            ${miniRing('Protein', protein, rda.protein, '#f59e0b', 0, 'protein')}
+                            ${miniRing('Carbs',   carbs,   rda.carbs,   '#0ea5e9', 0, 'carbs')}
+                            ${miniRing('Fat',     fat,     rda.fat,     '#8b5cf6', 0, 'fat')}
+                            ${miniRing('Fibre',   fiber,   rda.fiber,   '#10b981', 0, 'fibre')}
+                            ${miniRing('Salt',    salt,    rda.salt,    '#06b6d4', 1, 'salt')}
                         </div>
                     </div>` : '';
 
@@ -2892,6 +2939,179 @@
 
             macroDiscrepancySVG(p, c, f) { return this.macroThumbSVG(p, c, f, 20); },
             macroItemSVG(p, c, f)        { return this.macroThumbSVG(p, c, f, 32); },
+
+            // ── Macros tab ───────────────────────────────────────────────
+
+            async refreshMacros() {
+                const date = this.selectedTodayDate || this.getCurrentDateString();
+                const entries = await this.getFoodEntries(date);
+                this._macrosEntries = entries;
+
+                const rda = this.calculateRDA();
+                const noData = entries.length === 0;
+
+                if (noData || !rda) {
+                    ['macros-balance-content','macros-rda-content'].forEach(id => {
+                        document.getElementById(id).innerHTML = '<p style="color:var(--text-tertiary);font-size:12px;padding:8px 0;">No meals logged for this date.</p>';
+                    });
+                    document.getElementById('macros-detail-panel').style.display = 'none';
+                    return;
+                }
+
+                const protein = entries.reduce((s,e) => s+(e.protein_g||0),0);
+                const carbs   = entries.reduce((s,e) => s+(e.carbs_g||0),0);
+                const fat     = entries.reduce((s,e) => s+(e.fat_g||0),0);
+                const fibre   = entries.reduce((s,e) => s+(e.fibre_g||0),0);
+                const salt    = entries.reduce((s,e) => s+(e.salt_g||0),0);
+
+                // RDA is daily — no scaling needed
+                const dayRDA = {
+                    protein: rda.protein,
+                    carbs:   rda.carbs,
+                    fat:     rda.fat,
+                    fibre:   rda.fiber,
+                    salt:    rda.salt,
+                };
+
+                this.renderMacrosBalance(protein, carbs, fat);
+                this.renderMacrosRDA(protein, carbs, fat, fibre, salt, dayRDA, 1);
+                document.getElementById('macros-detail-panel').style.display = 'none';
+            },
+
+            renderMacrosBalance(protein, carbs, fat) {
+                const pK = protein*4, cK = carbs*4, fK = fat*9;
+                const total = pK + cK + fK;
+                const el = document.getElementById('macros-balance-content');
+                if (total === 0) {
+                    el.innerHTML = '<p style="color:var(--text-tertiary);font-size:12px;">No macro data — use Scan Food Label to capture P/C/F.</p>';
+                    return;
+                }
+                const aP = Math.round(pK/total*100), aC = Math.round(cK/total*100), aF = Math.round(fK/total*100);
+                const tP = this.profile?.macro_protein_pct ?? 15;
+                const tC = this.profile?.macro_carbs_pct   ?? 55;
+                const tF = this.profile?.macro_fat_pct     ?? 30;
+                const col = (a,t) => Math.abs(a-t)<=7 ? '#10b981' : Math.abs(a-t)<=15 ? '#f59e0b' : '#ef4444';
+
+                const row = (label, actual, target, key) => {
+                    const dev = actual - target;
+                    const dc  = Math.max(-50, Math.min(50, dev));
+                    const c   = col(actual, target);
+                    const barW = Math.abs(dc) / 50 * 50; // % of half bar
+                    const devStr = dev >= 0 ? `+${dev}%` : `${dev}%`;
+                    const bar = dev >= 0
+                        ? `<div style="position:absolute;left:50%;top:0;height:100%;width:${barW}%;background:${c};border-radius:0 4px 4px 0;"></div>`
+                        : `<div style="position:absolute;right:50%;top:0;height:100%;width:${barW}%;background:${c};border-radius:4px 0 0 4px;"></div>`;
+                    return `
+                        <div onclick="app.showMacroDetail('${key}')" style="cursor:pointer;padding:12px 0;border-bottom:1px solid var(--border-color);">
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+                                <span style="font-size:13px;font-weight:600;color:var(--text-primary);">${label}</span>
+                                <div>
+                                    <span style="font-size:14px;font-weight:800;color:${c};">${actual}%</span>
+                                    <span style="font-size:11px;color:var(--text-tertiary);margin-left:6px;">target ${target}%</span>
+                                    <span style="font-size:11px;font-weight:600;color:${c};margin-left:6px;">${devStr}</span>
+                                </div>
+                            </div>
+                            <div style="position:relative;height:10px;background:rgba(128,128,128,0.15);border-radius:5px;overflow:hidden;">
+                                <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.5);transform:translateX(-50%);z-index:1;"></div>
+                                ${bar}
+                            </div>
+                        </div>`;
+                };
+                el.innerHTML = row('Protein',aP,tP,'protein') + row('Carbs',aC,tC,'carbs') + row('Fat',aF,tF,'fat');
+            },
+
+            renderMacrosRDA(protein, carbs, fat, fibre, salt, periodRDA, daysWithData) {
+                const el = document.getElementById('macros-rda-content');
+                const pct = (v, r) => r > 0 ? Math.min(v/r, 1) : 0;
+                const mr = 22, msw = 6, sz = 54;
+                const mc = +(2 * Math.PI * mr).toFixed(2);
+
+                const ring = (key, label, value, rdaVal, color, decimals = 0) => {
+                    const frac = pct(value, rdaVal);
+                    const mp   = +(frac * mc).toFixed(2);
+                    const over = value > rdaVal * 1.1;
+                    const mColor = over ? '#ef4444' : color;
+                    const pctLbl = rdaVal > 0 ? Math.round(value/rdaVal*100)+'%' : '—';
+                    const valLbl = decimals > 0 ? value.toFixed(decimals) : Math.round(value);
+                    const rdaLbl = decimals > 0 ? rdaVal.toFixed(decimals) : Math.round(rdaVal);
+                    return `
+                        <div onclick="app.showMacroDetail('${key}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:8px 2px;border-radius:10px;transition:background 0.15s;"
+                             onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='transparent'">
+                            <div style="position:relative;width:${sz}px;height:${sz}px;">
+                                <svg viewBox="0 0 ${sz} ${sz}" style="width:${sz}px;height:${sz}px;">
+                                    <circle cx="${sz/2}" cy="${sz/2}" r="${mr}" fill="none" stroke="var(--bg-secondary)" stroke-width="${msw}"/>
+                                    <circle cx="${sz/2}" cy="${sz/2}" r="${mr}" fill="none" stroke="${mColor}" stroke-width="${msw}"
+                                        stroke-dasharray="${mp} ${mc}" stroke-linecap="round"
+                                        transform="rotate(-90 ${sz/2} ${sz/2})"/>
+                                </svg>
+                                <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                                    <div style="font-size:10px;font-weight:800;color:var(--text-primary);line-height:1;">${valLbl}g</div>
+                                    <div style="font-size:7px;color:var(--text-tertiary);font-weight:600;">${pctLbl}</div>
+                                </div>
+                            </div>
+                            <div style="font-size:10px;font-weight:600;color:var(--text-secondary);text-align:center;">${label}</div>
+                            <div style="font-size:9px;color:var(--text-tertiary);">/${rdaLbl}g</div>
+                        </div>`;
+                };
+
+                el.innerHTML = `
+                    <div style="display:flex;gap:2px;justify-content:space-around;">
+                        ${ring('protein','Protein',protein,periodRDA.protein,'#f59e0b')}
+                        ${ring('carbs',  'Carbs',  carbs,  periodRDA.carbs,  '#0ea5e9')}
+                        ${ring('fat',    'Fat',    fat,    periodRDA.fat,    '#8b5cf6')}
+                        ${ring('fibre',  'Fibre',  fibre,  periodRDA.fibre,  '#10b981')}
+                        ${ring('salt',   'Salt',   salt,   periodRDA.salt,   '#06b6d4', 1)}
+                    </div>`;
+            },
+
+            showMacroDetail(key) {
+                const entries = this._macrosEntries || [];
+                const cfg = {
+                    protein: { field:'protein_g', label:'Protein', unit:'g', decimals:1, color:'#f59e0b' },
+                    carbs:   { field:'carbs_g',   label:'Carbs',   unit:'g', decimals:1, color:'#0ea5e9' },
+                    fat:     { field:'fat_g',      label:'Fat',     unit:'g', decimals:1, color:'#8b5cf6' },
+                    fibre:   { field:'fibre_g',    label:'Fibre',   unit:'g', decimals:1, color:'#10b981' },
+                    salt:    { field:'salt_g',     label:'Salt',    unit:'g', decimals:2, color:'#06b6d4' },
+                }[key];
+                if (!cfg) return;
+
+                const filtered = entries
+                    .filter(e => (e[cfg.field] || 0) > 0)
+                    .sort((a,b) => (b[cfg.field]||0) - (a[cfg.field]||0));
+
+                const total = filtered.reduce((s,e) => s+(e[cfg.field]||0), 0);
+
+                document.getElementById('macros-detail-title').innerHTML =
+                    `${cfg.label} contributors <span style="font-size:12px;font-weight:400;color:var(--text-tertiary);">— ${total.toFixed(cfg.decimals)}${cfg.unit} total</span>`;
+
+                if (!filtered.length) {
+                    document.getElementById('macros-detail-list').innerHTML =
+                        '<p style="color:var(--text-tertiary);font-size:12px;">No entries with this macro data.</p>';
+                } else {
+                    const maxVal = filtered[0][cfg.field] || 1;
+                    document.getElementById('macros-detail-list').innerHTML = filtered.map(e => {
+                        const val = e[cfg.field] || 0;
+                        const barW = Math.round(val / maxVal * 100);
+                        return `
+                            <div style="padding:8px 0;border-bottom:1px solid var(--border-color);">
+                                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+                                    <div style="min-width:0;flex:1;">
+                                        <div style="font-size:13px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.esc(e.food_name)}</div>
+                                        <div style="font-size:11px;color:var(--text-tertiary);">${e.date} · ${e.meal_type}</div>
+                                    </div>
+                                    <div style="font-size:14px;font-weight:700;color:${cfg.color};margin-left:12px;flex-shrink:0;">${val.toFixed(cfg.decimals)}${cfg.unit}</div>
+                                </div>
+                                <div style="height:4px;background:rgba(128,128,128,0.15);border-radius:2px;overflow:hidden;">
+                                    <div style="height:100%;width:${barW}%;background:${cfg.color};border-radius:2px;opacity:0.7;"></div>
+                                </div>
+                            </div>`;
+                    }).join('');
+                }
+
+                const panel = document.getElementById('macros-detail-panel');
+                panel.style.display = 'block';
+                setTimeout(() => panel.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+            },
 
             // ── Suggestions ──────────────────────────────────────────────
 
@@ -3451,6 +3671,7 @@
                     btn.style.fontWeight = p === period ? '600' : '500';
                 });
                 this.refreshHistory();
+                this.refreshWeight();
             },
 
             async refreshHistory() {
@@ -3481,6 +3702,11 @@
                 const titles = { week: 'This Week', month: 'This Month', year: 'This Year' };
                 document.getElementById('history-chart-title').textContent = titles[period];
 
+                let actualDaysWithData = 0; // real logged days (important for year view)
+                const periodTotalDays = period === 'week' ? 7 : period === 'month'
+                    ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+                    : today.getDayOfYear?.() ?? Math.ceil((today - new Date(today.getFullYear(), 0, 0)) / 86400000);
+
                 if (period === 'week') {
                     const weekStart = new Date(today);
                     weekStart.setDate(today.getDate() - today.getDay());
@@ -3491,7 +3717,9 @@
                         d.setDate(weekStart.getDate() + i);
                         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                         const entries = await this.getFoodEntries(dateStr);
-                        dailyTotals.push(entries.reduce((s, e) => s + (e.calories || 0), 0));
+                        const dayTotal = entries.reduce((s, e) => s + (e.calories || 0), 0);
+                        dailyTotals.push(dayTotal);
+                        if (dayTotal > 0) actualDaysWithData++;
                         labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
                         sumMacros(entries);
                         mealTypes.forEach(type => {
@@ -3508,28 +3736,34 @@
                     for (let i = 1; i <= daysInMonth; i++) {
                         const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
                         const entries = await this.getFoodEntries(dateStr);
-                        dailyTotals.push(entries.reduce((s, e) => s + (e.calories || 0), 0));
+                        const dayTotal = entries.reduce((s, e) => s + (e.calories || 0), 0);
+                        dailyTotals.push(dayTotal);
+                        if (dayTotal > 0) actualDaysWithData++;
                         labels.push(i);
                         sumMacros(entries);
                     }
 
-                } else { // year
+                } else { // year — group by month for chart, count actual days for stats
                     const allEntries = await this.getAllFoodEntries();
+                    const thisYear = today.getFullYear();
+                    const yearEntries = allEntries.filter(e => e.date?.startsWith(`${thisYear}-`));
                     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                     for (let m = 0; m < 12; m++) {
-                        const monthStr = `${today.getFullYear()}-${String(m+1).padStart(2,'0')}`;
-                        const monthEntries = allEntries.filter(e => e.date?.startsWith(monthStr));
+                        const monthStr = `${thisYear}-${String(m+1).padStart(2,'0')}`;
+                        const monthEntries = yearEntries.filter(e => e.date?.startsWith(monthStr));
                         dailyTotals.push(monthEntries.reduce((s, e) => s + (e.calories || 0), 0));
                         labels.push(monthNames[m]);
                         sumMacros(monthEntries);
                     }
+                    // Count actual unique days logged this year
+                    actualDaysWithData = new Set(yearEntries.map(e => e.date)).size;
                 }
 
                 const total = dailyTotals.reduce((a, b) => a + b, 0);
-                const daysWithData = dailyTotals.filter(d => d > 0).length;
+                const daysWithData = period === 'year' ? actualDaysWithData : actualDaysWithData;
                 const avgDaily = daysWithData > 0 ? Math.round(total / daysWithData) : 0;
-                const periodDays = period === 'year' ? 365 : dailyTotals.length;
-                const deficit = (maintenance * periodDays) - total;
+                // Deficit only counts days you actually logged — not the full period
+                const deficit = (maintenance * daysWithData) - total;
 
                 const periodLabels = { week: 'this week', month: 'this month', year: 'this year' };
                 const noData = daysWithData === 0;
@@ -3566,7 +3800,7 @@
 
                 // Macros
                 this.renderMacrosChart({ protein: totalProtein, carbs: totalCarbs, fat: totalFat, hasData: macroEntryCount > 0, noData });
-                this.renderHistoryInsight({ total, avgDaily, daysWithData, period, deficit, target, maintenance, dailyTotals });
+                this.renderHistoryInsight({ total, avgDaily, daysWithData, periodTotalDays, period, deficit, target, maintenance, dailyTotals });
             },
 
             renderMacrosChart({ protein, carbs, fat, hasData, noData }) {
@@ -3641,39 +3875,46 @@
                 noteEl.style.display = 'none';
             },
 
-            renderHistoryInsight({ total, avgDaily, daysWithData, period, deficit, target, maintenance, dailyTotals }) {
+            renderHistoryInsight({ total, avgDaily, daysWithData, periodTotalDays, period, deficit, target, maintenance, dailyTotals }) {
                 if (daysWithData === 0) {
                     document.getElementById('history-insight').innerHTML = '<p style="color: var(--text-secondary); font-size: 12px;">No data logged for this period.</p>';
                     return;
                 }
-                const overDays = dailyTotals.filter(d => d > target && d > 0).length;
+                const overDays  = dailyTotals.filter(d => d > target && d > 0).length;
                 const underDays = dailyTotals.filter(d => d > 0 && d <= target).length;
+                const coverage  = daysWithData < periodTotalDays
+                    ? ` (logged ${daysWithData} of ${periodTotalDays} days)`
+                    : '';
+                const partialNote = daysWithData < periodTotalDays
+                    ? ` Based on ${daysWithData} logged day${daysWithData !== 1 ? 's' : ''} — unlogged days are excluded from all averages and estimates.`
+                    : '';
                 let insight, mood;
 
                 if (period === 'week') {
-                    const estLoss = (deficit / 7700).toFixed(2);
-                    if (avgDaily <= target && underDays >= 5) {
+                    const estLoss = (Math.max(0, deficit) / 7700).toFixed(2);
+                    if (avgDaily <= target && underDays >= Math.min(5, daysWithData)) {
                         mood = 'great';
-                        insight = `Strong week — you hit your ${target} kcal target on ${underDays} of ${daysWithData} logged days, averaging ${avgDaily} kcal/day. Your estimated deficit of ${Math.round(deficit)} kcal points to roughly ${estLoss} kg of progress.`;
+                        insight = `Strong week${coverage} — you hit your ${target.toLocaleString()} kcal target on ${underDays} of ${daysWithData} logged day${daysWithData !== 1 ? 's' : ''}, averaging ${avgDaily.toLocaleString()} kcal/day. Estimated deficit of ${Math.round(deficit).toLocaleString()} kcal across those days points to roughly ${estLoss} kg of progress.${partialNote}`;
                     } else if (avgDaily <= target + 150) {
                         mood = 'good';
-                        insight = `A solid week averaging ${avgDaily} kcal/day against your ${target} kcal target. You exceeded the target on ${overDays} day${overDays !== 1 ? 's' : ''} — tightening those meals would sharpen your deficit further.`;
+                        insight = `A solid week${coverage} averaging ${avgDaily.toLocaleString()} kcal/day against your ${target.toLocaleString()} kcal target. You exceeded the target on ${overDays} day${overDays !== 1 ? 's' : ''} — tightening those meals would sharpen your deficit.${partialNote}`;
                     } else {
                         mood = 'caution';
-                        insight = `This week averaged ${avgDaily} kcal/day — ${avgDaily - target} kcal above your ${target} kcal target. You went over on ${overDays} of ${daysWithData} logged days; identifying the meals driving the surplus is the key next step.`;
+                        insight = `This week averaged ${avgDaily.toLocaleString()} kcal/day${coverage} — ${(avgDaily - target).toLocaleString()} kcal above your ${target.toLocaleString()} kcal target. You went over on ${overDays} of ${daysWithData} logged day${daysWithData !== 1 ? 's' : ''}.${partialNote}`;
                     }
                 } else if (period === 'month') {
+                    const estLoss = (Math.max(0, deficit) / 7700).toFixed(2);
                     if (avgDaily <= target) {
                         mood = 'great';
-                        insight = `Great month — your ${daysWithData}-day average of ${avgDaily} kcal sits within your ${target} kcal target. Your estimated monthly deficit of ${Math.round(deficit)} kcal equates to roughly ${(Math.max(0, deficit) / 7700).toFixed(2)} kg of progress.`;
+                        insight = `On track this month — averaging ${avgDaily.toLocaleString()} kcal/day across ${daysWithData} logged day${daysWithData !== 1 ? 's' : ''} of ${periodTotalDays}, within your ${target.toLocaleString()} kcal target. Estimated deficit of ${Math.round(deficit).toLocaleString()} kcal equates to roughly ${estLoss} kg.${partialNote}`;
                     } else {
                         mood = 'caution';
-                        insight = `This month you've averaged ${avgDaily} kcal across ${daysWithData} logged days — ${avgDaily - target} kcal above your ${target} kcal target. Consistent daily logging will help pinpoint where to cut back.`;
+                        insight = `Averaging ${avgDaily.toLocaleString()} kcal/day across ${daysWithData} logged day${daysWithData !== 1 ? 's' : ''} of ${periodTotalDays} — ${(avgDaily - target).toLocaleString()} kcal above your ${target.toLocaleString()} kcal target. Consistent logging will help identify where to cut back.${partialNote}`;
                     }
                 } else {
                     const activeMonths = dailyTotals.filter(m => m > 0).length;
                     mood = avgDaily <= target ? 'good' : 'caution';
-                    insight = `Across ${activeMonths} active month${activeMonths !== 1 ? 's' : ''} this year, your average is ${avgDaily} kcal/day against a ${target} kcal target. ${avgDaily <= target ? 'You\'re broadly tracking toward your goal — keep the consistency going.' : 'Your intake is running above target; focusing on the higher-calorie months will make the biggest difference.'}`;
+                    insight = `Across ${daysWithData} logged day${daysWithData !== 1 ? 's' : ''} in ${activeMonths} active month${activeMonths !== 1 ? 's' : ''} this year, your average is ${avgDaily.toLocaleString()} kcal/day against a ${target.toLocaleString()} kcal target. ${avgDaily <= target ? 'You\'re broadly on track — keep the consistency going.' : 'Intake is running above target; the higher-calorie months are the best place to focus.'}`;
                 }
 
                 const m = (this.insightMoodMap()[mood] || this.insightMoodMap().good);
@@ -3681,53 +3922,70 @@
             },
 
             async refreshWeight() {
-                const allWeights = await this.getWeightEntries('2000-01-01', '2099-12-31');
-                
+                const period = this.historyPeriod || 'week';
+                const days = { week: 7, month: 30, year: 365 }[period];
+                const today = new Date();
+                const start = new Date(today);
+                start.setDate(today.getDate() - days);
+                const startStr = start.toISOString().split('T')[0];
+                const endStr = today.toISOString().split('T')[0];
+
+                const allWeights     = await this.getWeightEntries('2000-01-01', '2099-12-31');
+                const periodWeights  = await this.getWeightEntries(startStr, endStr);
+
+                const wrapperEl = document.getElementById('weight-chart-wrapper');
+                const emptyEl   = document.getElementById('weight-chart-empty');
+
                 if (allWeights.length === 0) {
                     document.getElementById('weight-current').textContent = '—';
-                    document.getElementById('weight-7day').textContent = '—';
-                    document.getElementById('weight-30day').textContent = '—';
+                    document.getElementById('weight-period-change').textContent = '—';
                     document.getElementById('weight-to-target').textContent = '—';
+                    if (wrapperEl) wrapperEl.style.display = 'none';
+                    if (emptyEl)   emptyEl.style.display   = 'block';
                     return;
                 }
 
                 const latest = allWeights[allWeights.length - 1];
                 document.getElementById('weight-current').textContent = latest.weight_kg.toFixed(1);
-                document.getElementById('weight-target').textContent = this.profile?.target_weight_kg.toFixed(1) || '—';
-
-                const today = new Date();
-                const sevenDaysAgo = new Date(today);
-                sevenDaysAgo.setDate(today.getDate() - 7);
-                const thirtyDaysAgo = new Date(today);
-                thirtyDaysAgo.setDate(today.getDate() - 30);
-
-                const sevenDayChange = allWeights.filter(w => new Date(w.date) >= sevenDaysAgo);
-                const thirtyDayChange = allWeights.filter(w => new Date(w.date) >= thirtyDaysAgo);
-
-                if (sevenDayChange.length > 0) {
-                    const change = latest.weight_kg - sevenDayChange[0].weight_kg;
-                    this.weightChange7d = change;
-                    document.getElementById('weight-7day').textContent = change > 0 ? `+${change.toFixed(1)} kg` : `${change.toFixed(1)} kg`;
-                }
-
-                if (thirtyDayChange.length > 0) {
-                    const change = latest.weight_kg - thirtyDayChange[0].weight_kg;
-                    document.getElementById('weight-30day').textContent = change > 0 ? `+${change.toFixed(1)} kg` : `${change.toFixed(1)} kg`;
-                }
-
                 const toTarget = latest.weight_kg - (this.profile?.target_weight_kg || 0);
-                document.getElementById('weight-to-target').textContent = toTarget > 0 ? `${toTarget.toFixed(1)} kg` : 'Target reached!';
+                document.getElementById('weight-to-target').textContent = toTarget > 0 ? `${toTarget.toFixed(1)}` : '✓';
 
-                // Chart
+                // Period change
+                if (periodWeights.length >= 2) {
+                    const change = periodWeights[periodWeights.length - 1].weight_kg - periodWeights[0].weight_kg;
+                    this.weightChange7d = period === 'week' ? change : this.weightChange7d;
+                    const changeEl = document.getElementById('weight-period-change');
+                    changeEl.textContent = (change > 0 ? '+' : '') + change.toFixed(1);
+                    changeEl.style.color = change <= 0 ? 'var(--accent-success)' : 'var(--accent-danger)';
+                } else {
+                    document.getElementById('weight-period-change').textContent = '—';
+                    if (period === 'week') {
+                        const sevenDay = allWeights.filter(w => new Date(w.date) >= start);
+                        if (sevenDay.length >= 2) {
+                            this.weightChange7d = sevenDay[sevenDay.length - 1].weight_kg - sevenDay[0].weight_kg;
+                        }
+                    }
+                }
+
+                // Chart — show period entries, fall back to all if fewer than 2
+                const chartData = periodWeights.length >= 2 ? periodWeights : allWeights;
+                if (wrapperEl) wrapperEl.style.display = '';
+                if (emptyEl)   emptyEl.style.display   = 'none';
+
+                const fmt = period === 'year'
+                    ? d => new Date(d).toLocaleDateString('en-GB', { month: 'short' })
+                    : d => new Date(d).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+
                 this.createChart('weight-chart', 'line', {
-                    labels: allWeights.map(w => new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                    labels: chartData.map(w => fmt(w.date)),
                     datasets: [{
                         label: 'Weight (kg)',
-                        data: allWeights.map(w => w.weight_kg),
+                        data: chartData.map(w => w.weight_kg),
                         borderColor: 'rgba(16, 185, 129, 1)',
                         backgroundColor: 'rgba(16, 185, 129, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        fill: true,
+                        pointRadius: chartData.length > 30 ? 0 : 3,
                     }]
                 });
 

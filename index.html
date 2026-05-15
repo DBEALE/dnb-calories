@@ -3,7 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Calorie Deficit Tracker</title>
+    <title>FitnessHealth – Calorie Tracker</title>
+    <meta name="description" content="Offline-first calorie and nutrition tracker with AI label scanning. No account required.">
+    <meta name="theme-color" content="#1e293b">
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- iOS PWA support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FitnessHealth">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+    <!-- Open Graph (for sharing links) -->
+    <meta property="og:title" content="FitnessHealth – Calorie Tracker">
+    <meta property="og:description" content="Offline-first calorie and nutrition tracker with AI label scanning. No account required.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://fitnesshealth.app">
     <script>if(localStorage.getItem('darkMode')==='true')document.body?document.body.classList.add('dark'):document.addEventListener('DOMContentLoaded',()=>document.body.classList.add('dark'));</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <style>
@@ -1541,7 +1558,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 38;
+        const APP_BUILD = 39;
 
         const CHANGELOG = [
             {

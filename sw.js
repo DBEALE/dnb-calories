@@ -3,6 +3,9 @@ const CACHE = 'calorie-tracker-v1';
 const PRECACHE = [
   '/',
   '/index.html',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js',
 ];
 

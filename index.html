@@ -49,16 +49,25 @@
             --shadow-lg: 0 10px 30px rgba(26,26,46,0.12), 0 4px 8px rgba(26,26,46,0.06);
         }
 
+        html {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             height: 100vh;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            max-width: 100vw;
         }
 
         .app-container {
             height: 100vh;
+            max-width: 100vw;
+            overflow-x: hidden;
         }
 
         .content {
@@ -1575,7 +1584,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 45;
+        const APP_BUILD = 46;
 
         const CHANGELOG = [
             {

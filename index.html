@@ -1626,7 +1626,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 50;
+        const APP_BUILD = 51;
 
         const TUTORIAL = [
             {
@@ -4909,7 +4909,12 @@
                             </div>
                         </div>
                         ${data.image_type === 'food_photo' ? `
-                        <div style="font-size:12px;color:#92400e;line-height:1.5;margin-bottom:8px;">If the food name below is wrong, correct it and tap <strong>Re-analyse</strong> for a better estimate.</div>
+                        ${data.text_only_lookup ? `
+                        <div style="font-size:12px;color:#1d4ed8;line-height:1.5;margin-bottom:6px;padding:6px 8px;background:rgba(59,130,246,0.1);border-radius:6px;">
+                            ℹ️ Values calculated from the food name <strong>"${this.esc(data.food_name)}"</strong> — image was not used. Check the portion size and adjust calories if needed.
+                        </div>` : `
+                        <div style="font-size:12px;color:#92400e;line-height:1.5;margin-bottom:6px;">If the food name below is wrong, correct it and tap <strong>Re-analyse</strong> — the image will be ignored and values will be looked up from the name only.</div>
+                        `}
                         <button onclick="app.reanalyseWithDescription()" style="width:100%;padding:8px;border:1px solid rgba(245,158,11,0.5);border-radius:8px;background:rgba(245,158,11,0.15);color:#92400e;font-size:12px;font-weight:600;cursor:pointer;">🔄 Re-analyse with corrected name</button>
                         ` : ''}
                     </div>` : ''}

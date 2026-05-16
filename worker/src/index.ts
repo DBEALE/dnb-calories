@@ -531,11 +531,63 @@ async function callLabelModel(imageBase64: string, apiKey: string): Promise<Extr
   return normalizeExtraction(parseExtractResponse(content));
 }
 
+// Text-only nutrition lookup — used when the user has provided a confirmed food description.
+// Skips the image entirely so visual misidentification can't interfere.
+async function callTextNutrition(description: string, apiKey: string): Promise<ExtractResponse> {
+  const prompt = `You are a precise nutrition calculator. The user has described their meal as: "${description}"
+
+Step 1 — identify each ingredient and its quantity from the description.
+Step 2 — for each ingredient, state the exact weight (g) and its nutritional values per that weight using standard UK/USDA food data.
+Step 3 — sum all ingredients to get the total meal nutrition.
+Step 4 — return the totals as JSON.
+
+Use these standard reference values (do not deviate):
+- 1 medium egg scrambled (cooked with a little butter): ~90 kcal, 6g protein, 1g carbs, 7g fat
+- 1 slice wholegrain/wholemeal bread (40g): ~88 kcal, 4g protein, 15g carbs, 1.5g fat, 2g fibre
+- 1 slice white bread (35g): ~83 kcal, 3g protein, 16g carbs, 0.8g fat
+- 1 rasher bacon (grilled): ~80 kcal, 7g protein, 0g carbs, 6g fat
+- 1 tbsp butter (15g): ~110 kcal, 0g protein, 0g carbs, 12g fat
+Use similar precision for any other ingredients mentioned.
+
+Return ONLY this JSON, no other text:
+{
+  "image_type": "food_photo",
+  "food_name": "${description}",
+  "brand": null,
+  "serving_size_text": "${description}",
+  "servings": 1,
+  "per_pack": false,
+  "calories_kcal": number,
+  "protein_g": number,
+  "carbs_g": number,
+  "fat_g": number,
+  "sugar_g": null,
+  "salt_g": null,
+  "fibre_g": number or null,
+  "confidence": 0.85,
+  "warnings": ["Calculated from food description — adjust if portion differs"]
+}`;
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://fitnesshealth.app', 'X-Title': 'FitnessHealth' },
+    body: JSON.stringify({
+      model: 'openai/gpt-4o-mini', max_tokens: 500,
+      temperature: 0,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Text nutrition model error: ${res.status} ${await res.text()}`);
+  const content = parseModelContent(await res.json());
+  if (!content) throw new Error('No content from text nutrition model');
+  const result = normalizeExtraction(parseExtractResponse(content)) as ExtractResponse & { text_only_lookup?: boolean };
+  result.food_name = description; // always force the confirmed name
+  result.text_only_lookup = true;
+  return result;
+}
+
 // gemini-flash-1.5 via OpenAI-compatible endpoint — better for food photo estimation
-async function callFoodPhotoModel(imageBase64: string, apiKey: string, description?: string): Promise<ExtractResponse> {
-  const hint = description
-    ? `\n\nIMPORTANT: The user has identified this food as "${description}". Use this as your primary guide — estimate calories and macros based on this food and the portion size visible in the image.`
-    : '';
+async function callFoodPhotoModel(imageBase64: string, apiKey: string): Promise<ExtractResponse> {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://fitnesshealth.app', 'X-Title': 'FitnessHealth' },
@@ -543,7 +595,7 @@ async function callFoodPhotoModel(imageBase64: string, apiKey: string, descripti
       model: 'google/gemini-flash-1.5', max_tokens: 500,
       messages: [{ role: 'user', content: [
         { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
-        { type: 'text', text: EXTRACTION_PROMPT + hint },
+        { type: 'text', text: EXTRACTION_PROMPT },
       ]}],
     }),
   });
@@ -554,13 +606,10 @@ async function callFoodPhotoModel(imageBase64: string, apiKey: string, descripti
 }
 
 async function callOpenRouter(imageBase64: string, apiKey: string, description?: string): Promise<ExtractResponse> {
-  // If a user-provided description exists, skip detection and go straight to food photo model
+  // If the user has confirmed the food name, skip the image entirely —
+  // visual misidentification cannot affect the result.
   if (description) {
-    try {
-      return await callFoodPhotoModel(imageBase64, apiKey, description);
-    } catch (err) {
-      console.warn('Food photo model with description failed:', err);
-    }
+    return callTextNutrition(description, apiKey);
   }
 
   // First call: gpt-4o-mini to detect image type and extract (great for labels)

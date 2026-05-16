@@ -9,7 +9,8 @@
       "WebFetch(domain:openrouter.ai)",
       "Bash(wrangler deploy *)",
       "Bash(wrangler d1 *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "WebSearch"
     ]
   }
 }

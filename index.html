@@ -1072,6 +1072,7 @@
                         Data stored locally in your browser.<br>
                         No login required.
                     </p>
+                    <button onclick="app.openTutorial()" class="btn btn-secondary" style="width:100%;margin-top:8px;">👋 Take a Tour</button>
                 </div>
             </div>
 
@@ -1140,6 +1141,24 @@
                 <span class="nav-icon">🛠️</span>
                 <span>Admin</span>
             </button>
+        </div>
+    </div>
+
+    <!-- Tutorial modal -->
+    <div class="modal" id="modal-tutorial">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="tutorial-title"></div>
+                <button class="modal-close" onclick="app.closeTutorial()">✕</button>
+            </div>
+            <div class="modal-body" id="tutorial-body" style="min-height:260px;"></div>
+            <div style="padding:0 16px 16px;">
+                <div id="tutorial-dots" style="display:flex;justify-content:center;gap:6px;margin-bottom:14px;"></div>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="app.tutorialNav(-1)" class="btn btn-secondary" style="flex:1;" id="tutorial-prev">‹ Prev</button>
+                    <button onclick="app.tutorialNav(1)"  class="btn btn-primary"   style="flex:1;" id="tutorial-next">Next ›</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1303,7 +1322,7 @@
                     <input type="date" id="fav-date" style="flex: 1;">
                     <button onclick="app.shiftModalDate('fav-date', 1)" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1;">›</button>
                 </div>
-                <div class="upload-form-row" style="margin-bottom: 16px;">
+                <div class="upload-form-row" style="margin-bottom: 12px;">
                     <label>Meal</label>
                     <select id="fav-meal-type" onchange="app.trackMealType(this.value)">
                         <option value="breakfast">Breakfast</option>
@@ -1312,6 +1331,11 @@
                         <option value="snack">Snack</option>
                         <option value="drink">Drink</option>
                     </select>
+                </div>
+                <div style="position:relative;margin-bottom:12px;">
+                    <input type="text" id="fav-search" placeholder="Search favourites…" oninput="app.refreshFavouritesList()"
+                        style="width:100%;padding:9px 12px 9px 32px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-secondary);color:var(--text-primary);font-size:13px;">
+                    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);pointer-events:none;">🔍</span>
                 </div>
                 <div id="favourites-list"></div>
             </div>
@@ -1602,9 +1626,171 @@
     </div>
 
     <script>
-        const APP_BUILD = 49;
+        const APP_BUILD = 50;
+
+        const TUTORIAL = [
+            {
+                icon: '👋',
+                title: 'Welcome to FitnessHealth',
+                body: `<p style="font-size:14px;color:var(--text-secondary);line-height:1.7;margin-bottom:16px;">This tour walks you through everything the app can do — what each chart means, how to read your data, and how to get the most out of it.</p>
+                    <div style="background:var(--bg-secondary);border-radius:12px;padding:14px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+                        <strong style="color:var(--text-primary);">What this app tracks:</strong><br>
+                        🍽️ Calories and macros from meals<br>
+                        📊 Daily progress vs your targets<br>
+                        ⚖️ Weight trends over time<br>
+                        💊 Nutrition vs recommended daily amounts
+                    </div>`
+            },
+            {
+                icon: '📊',
+                title: 'The Calorie Ring',
+                body: `<div style="text-align:center;font-size:48px;margin-bottom:12px;">📊</div>
+                    <p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">The large ring on the <strong>Log</strong> tab fills as you log meals throughout the day.</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                        🟢 <strong>Green</strong> — under your calorie target, on track<br>
+                        🟡 <strong>Amber</strong> — approaching your limit<br>
+                        🔴 <strong>Red</strong> — over your target<br>
+                        🔴 <strong>Inner ring</strong> — appears when you exceed your target, showing how far over you are<br><br>
+                        Below the ring: remaining budget and how your intake compares to your maintenance calories.
+                    </div>`
+            },
+            {
+                icon: '👆',
+                title: 'Status Panel',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">Four status rows sit next to the calorie ring — each gives you a quick thumbs up or down:</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:2;">
+                        📊 <strong>Calories</strong> — are you within your daily target?<br>
+                        🥗 <strong>Macros</strong> — how many of P/C/F are within ±10% of your set targets?<br>
+                        💊 <strong>Nutrition</strong> — protein vs RDA and salt levels<br>
+                        ⚖️ <strong>Weight</strong> — your 7-day weight trend (down, steady, or up)
+                    </div>`
+            },
+            {
+                icon: '🥗',
+                title: 'Macro Deviation Charts',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">Every meal group and individual entry shows a tiny 3-column chart — <strong>P · C · F</strong>.</p>
+                    <div style="background:var(--bg-secondary);border-radius:12px;padding:14px;font-size:13px;color:var(--text-secondary);line-height:1.8;margin-bottom:12px;">
+                        The <strong>centre line</strong> of each bar is your target percentage.<br>
+                        Bars extending <strong>right</strong> = over target for that macro.<br>
+                        Bars extending <strong>left</strong> = under target.
+                    </div>
+                    🟢 Within 7% of target<br>
+                    🟡 Within 15% of target<br>
+                    🔴 More than 15% off<br><br>
+                    <em style="font-size:12px;color:var(--text-tertiary);">Tap any nutrition ring on the Log tab to jump straight to the contributor breakdown on the Macros tab.</em>`
+            },
+            {
+                icon: '🥗',
+                title: 'Macros Tab',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">The <strong>Macros</strong> tab gives you a full breakdown of today's nutrition — use the date arrows to view any day.</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                        <strong>Macro Balance</strong> — three horizontal bars showing your Protein / Carbs / Fat split vs your personal targets. The centre of each bar is your goal — bars extend right (over) or left (under).<br><br>
+                        <strong>Nutrition vs RDA</strong> — five rings for Protein, Carbs, Fat, Fibre and Salt against your daily recommended amounts.<br><br>
+                        👆 <strong>Tap any bar or ring</strong> to see a ranked list of every meal that contributed to it — sorted highest to lowest with a relative bar showing each meal's share.
+                    </div>`
+            },
+            {
+                icon: '📈',
+                title: 'History Tab',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">The <strong>History</strong> tab shows your calorie trends and weight over Week / Month / Year. The period selector controls both charts.</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                        📊 <strong>KPI row</strong> — total calories, estimated deficit, average per day, and estimated fat loss in kg.<br><br>
+                        ⚠️ <strong>Averages only count days you actually logged</strong> — if you logged 3 of 7 days, the average divides by 3, not 7. The insight tells you your coverage.<br><br>
+                        ⚖️ <strong>Weight chart</strong> — filters to the same period. The period-change KPI shows whether you gained or lost during the window (green = down, red = up).
+                    </div>`
+            },
+            {
+                icon: '💡',
+                title: 'AI Insight',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">The <strong>AI Insight</strong> on the Log tab is a personalised daily check-in generated from your actual numbers.</p>
+                    <div style="background:var(--bg-secondary);border-radius:12px;padding:14px;font-size:13px;color:var(--text-secondary);line-height:1.8;margin-bottom:12px;">
+                        ⏰ <strong>Time-aware</strong> — if it's 9am and you've only had breakfast, it won't say you're "well under target". It compares your intake to what's expected for the time of day.<br><br>
+                        🔁 Tap <strong>↻ Refresh</strong> to regenerate it at any time — useful after logging more meals.
+                    </div>
+                    The History tab also has an insight summarising your performance over the selected period.`
+            },
+            {
+                icon: '📸',
+                title: 'Scanning Food Labels',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">Tap <strong>📸 Scan Food Label</strong> on the Log tab to extract nutrition data automatically using AI.</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                        🖼️ <strong>Gallery</strong> — pick an existing photo from your camera roll<br>
+                        📷 <strong>Camera</strong> — shoot the label directly (rear camera)<br><br>
+                        The AI handles both <strong>nutrition labels</strong> and <strong>photos of meals</strong> — for meals it will estimate values based on what it can see, with lower confidence.<br><br>
+                        You can always review and edit any extracted values before saving. Tick <strong>⭐ Save as favourite</strong> to reuse it quickly later.
+                    </div>`
+            },
+            {
+                icon: '⭐',
+                title: 'Favourites',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">Save any meal as a favourite by ticking <strong>⭐ Save as favourite</strong> when logging. Access them via the ⭐ button on the Log tab.</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                        🔍 <strong>Search</strong> to filter your list by name or brand.<br><br>
+                        ‹ × › <strong>Adjust servings</strong> before logging — tap ‹ or › to change the quantity in 0.5 steps. Calories and all macros scale automatically, and the values update live as you adjust.<br><br>
+                        The meal type is pre-selected based on what you've already logged today, so you're always one tap away from adding a regular item.
+                    </div>`
+            },
+            {
+                icon: '🎯',
+                title: 'Setting Your Targets',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">All targets are set in <strong>Settings</strong> — tap ⚙️ in the top-right corner.</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                        🎯 <strong>Calorie Target</strong> — calculated by AI based on your profile during setup. You can adjust it in Settings at any time.<br><br>
+                        🥗 <strong>Macro Targets</strong> — set your ideal Protein / Carbs / Fat percentage split. Targets must add up to 100%. These drive all the deviation charts throughout the app.<br><br>
+                        💊 <strong>RDA Targets</strong> — customise your recommended daily amounts for Protein, Carbs, Fat, Fibre and Salt. Defaults are based on UK reference values.
+                    </div>`
+            },
+            {
+                icon: '🔄',
+                title: 'Sync & Multi-device',
+                body: `<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;">Your data is stored locally in your browser and automatically synced to the cloud when you're online.</p>
+                    <div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
+                        🔑 Go to <strong>Settings → Sync</strong> to find your Sync Key.<br><br>
+                        Copy it and paste it into Settings → Sync on any other device to share your data across your phone, tablet, or desktop.<br><br>
+                        📶 The app works fully <strong>offline</strong> — data is cached locally and syncs the moment you reconnect. Tap 🔄 in the header to force a sync at any time.
+                    </div>`
+            },
+            {
+                icon: '🚀',
+                title: 'You\'re all set!',
+                body: `<div style="text-align:center;font-size:56px;margin-bottom:16px;">🚀</div>
+                    <p style="font-size:14px;color:var(--text-secondary);line-height:1.7;text-align:center;margin-bottom:16px;">That covers the essentials. The best way to learn is to start logging — even a few days of data makes the charts meaningful.</p>
+                    <div style="background:var(--bg-secondary);border-radius:12px;padding:14px;font-size:13px;color:var(--text-secondary);line-height:1.8;text-align:center;">
+                        💡 Have a suggestion? Tap the <strong>💡 Suggest</strong> tab — ideas go straight to the developer.<br><br>
+                        You can always reopen this tour from <strong>Settings → About → Take a Tour</strong>.
+                    </div>`
+            },
+        ];
 
         const CHANGELOG = [
+            {
+                date: '2026-05-16',
+                title: 'Smarter food photo scanning',
+                items: [
+                    'Food photos now use Gemini Flash 1.5 for better meal recognition, labels still use GPT-4o-mini',
+                    'When the AI misidentifies a meal, correct the food name and tap 🔄 Re-analyse — the description guides the model for a much more accurate estimate',
+                    'Re-analysis skips the detection step and goes straight to estimation with your description',
+                ]
+            },
+            {
+                date: '2026-05-15',
+                title: 'Interactive tour',
+                items: [
+                    '12-slide guided tour covering every feature — tap 👋 Take a Tour in Settings → About',
+                    'Shows automatically on first visit',
+                    'Dot navigation lets you jump to any slide; tap Done or ✕ to dismiss',
+                ]
+            },
+            {
+                date: '2026-05-15',
+                title: 'Favourites improvements',
+                items: [
+                    'Meal type pre-selected to match the latest meal already logged for that date, or Breakfast if none',
+                    'Search box filters favourites by name or brand as you type',
+                    'Log button replaced with a compact + icon',
+                    '‹ and › buttons let you adjust the serving quantity before logging — all nutritional values scale accordingly',
+                ]
+            },
             {
                 date: '2026-05-15',
                 title: 'Macros tab',
@@ -2099,6 +2285,10 @@
                 // Service worker
                 if ('serviceWorker' in navigator) {
                     navigator.serviceWorker.register('./sw.js').catch(() => {});
+                }
+                // Show tutorial on first visit
+                if (!localStorage.getItem('tutorialSeen')) {
+                    setTimeout(() => this.openTutorial(), 800);
                 }
                 // Sync setup
                 const keyEl = document.getElementById('sync-key-display');
@@ -3207,6 +3397,51 @@
                 }
             },
 
+            // ── Tutorial ─────────────────────────────────────────────────
+
+            _tutorialStep: 0,
+
+            openTutorial(step = 0) {
+                this._tutorialStep = step;
+                this.renderTutorialStep();
+                this.openModal('tutorial');
+            },
+
+            closeTutorial() {
+                this.closeModal('tutorial');
+                localStorage.setItem('tutorialSeen', '1');
+            },
+
+            tutorialNav(delta) {
+                const next = this._tutorialStep + delta;
+                if (next < 0 || next >= TUTORIAL.length) {
+                    if (next >= TUTORIAL.length) this.closeTutorial();
+                    return;
+                }
+                this._tutorialStep = next;
+                this.renderTutorialStep();
+            },
+
+            renderTutorialStep() {
+                const step = this._tutorialStep;
+                const slide = TUTORIAL[step];
+                const total = TUTORIAL.length;
+
+                document.getElementById('tutorial-title').textContent = slide.title;
+                document.getElementById('tutorial-body').innerHTML = `<div style="padding:4px 0 8px;">${slide.body}</div>`;
+
+                // Dots
+                document.getElementById('tutorial-dots').innerHTML = TUTORIAL.map((_, i) =>
+                    `<div onclick="app.openTutorial(${i})" style="width:8px;height:8px;border-radius:50%;cursor:pointer;background:${i === step ? 'var(--accent-info)' : 'var(--bg-tertiary)'};transition:background 0.2s;"></div>`
+                ).join('');
+
+                // Buttons
+                const prevBtn = document.getElementById('tutorial-prev');
+                const nextBtn = document.getElementById('tutorial-next');
+                prevBtn.style.display = step === 0 ? 'none' : '';
+                nextBtn.textContent = step === total - 1 ? 'Done ✓' : 'Next ›';
+            },
+
             // ── Admin ────────────────────────────────────────────────────
 
             _adminTaps: 0,
@@ -4179,64 +4414,125 @@
             openFavourites() {
                 const today = this.selectedTodayDate || this.getCurrentDateString();
                 document.getElementById('fav-date').value = today;
-                const mealSelect = document.getElementById('fav-meal-type');
-                mealSelect.value = (this.lastMealDate === today && this.lastMealType) ? this.lastMealType : 'breakfast';
+                document.getElementById('fav-search').value = '';
+                this._favQty = {};
+                // Pre-select meal type from latest entry for this date
+                this.getFoodEntries(today).then(entries => {
+                    const mealSelect = document.getElementById('fav-meal-type');
+                    if (entries.length > 0) {
+                        const latest = [...entries].sort((a,b) => (b.time||'').localeCompare(a.time||''))[0];
+                        mealSelect.value = latest.meal_type || 'breakfast';
+                    } else {
+                        mealSelect.value = 'breakfast';
+                    }
+                });
                 this.refreshFavouritesList();
                 this.openModal('favourites');
             },
 
             refreshFavouritesList() {
+                const query = (document.getElementById('fav-search')?.value || '').toLowerCase().trim();
                 const req = db.transaction(['favourites'], 'readonly').objectStore('favourites').getAll();
                 req.onsuccess = () => {
-                    const favs = req.result.filter(f => !f.deleted);
+                    let favs = req.result.filter(f => !f.deleted);
+                    if (query) {
+                        favs = favs.filter(f =>
+                            f.food_name?.toLowerCase().includes(query) ||
+                            f.brand?.toLowerCase().includes(query)
+                        );
+                    }
                     if (favs.length === 0) {
-                        document.getElementById('favourites-list').innerHTML =
-                            '<p style="color: var(--text-secondary); font-size: 12px; text-align: center; padding: 24px 0;">No favourites yet.<br>Tick ⭐ Save as favourite when logging a meal.</p>';
+                        document.getElementById('favourites-list').innerHTML = query
+                            ? `<p style="color:var(--text-secondary);font-size:12px;text-align:center;padding:24px 0;">No results for "<strong>${this.esc(query)}</strong>"</p>`
+                            : '<p style="color: var(--text-secondary); font-size: 12px; text-align: center; padding: 24px 0;">No favourites yet.<br>Tick ⭐ Save as favourite when logging a meal.</p>';
                         return;
                     }
+                    const btnStyle = 'border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;padding:5px 8px;line-height:1;';
                     document.getElementById('favourites-list').innerHTML = favs.map(fav => {
-                        const macros = [
-                            fav.protein_g ? `P ${Math.round(fav.protein_g)}g` : '',
-                            fav.carbs_g   ? `C ${Math.round(fav.carbs_g)}g`   : '',
-                            fav.fat_g     ? `F ${Math.round(fav.fat_g)}g`     : '',
-                            fav.fibre_g   ? `Fi ${Math.round(fav.fibre_g)}g`  : '',
+                        const qty = (this._favQty || {})[fav.id] || 1;
+                        const qtyLabel = qty % 1 === 0 ? `×${qty}` : `×${qty.toFixed(1)}`;
+                        const scaledCal = Math.round((fav.calories || 0) * qty);
+                        const macros = (q) => [
+                            fav.protein_g ? `P ${Math.round(fav.protein_g * q)}g` : '',
+                            fav.carbs_g   ? `C ${Math.round(fav.carbs_g   * q)}g` : '',
+                            fav.fat_g     ? `F ${Math.round(fav.fat_g     * q)}g` : '',
+                            fav.fibre_g   ? `Fi ${Math.round(fav.fibre_g  * q)}g` : '',
                         ].filter(Boolean).join(' · ');
                         return `
-                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-color);">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${this.esc(fav.food_name)}</div>
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
-                                    <strong>${fav.calories} kcal</strong>${macros ? ' &nbsp;·&nbsp; ' + macros : ''}
+                        <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border-color);"
+                             data-fav-calories="${fav.calories||0}" data-fav-protein="${fav.protein_g||0}" data-fav-carbs="${fav.carbs_g||0}" data-fav-fat="${fav.fat_g||0}" data-fav-fibre="${fav.fibre_g||0}">
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${this.esc(fav.food_name)}</div>
+                                <div id="fav-info-${fav.id}" style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
+                                    <strong>${scaledCal} kcal</strong>${macros(qty) ? ' &nbsp;·&nbsp; ' + macros(qty) : ''}
                                 </div>
-                                ${fav.brand ? `<div style="font-size: 11px; color: var(--text-tertiary);">${this.esc(fav.brand)}</div>` : ''}
+                                ${fav.brand ? `<div style="font-size:11px;color:var(--text-tertiary);">${this.esc(fav.brand)}</div>` : ''}
                             </div>
-                            <button onclick="app.logFavourite(${fav.id})" style="background: var(--accent-success); color: white; border: none; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;">Log</button>
-                            <button onclick="app.openEditFavourite(${fav.id})" style="background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-tertiary); flex-shrink: 0; padding: 0 2px;">✏️</button>
-                            <button onclick="app.deleteFavourite(${fav.id})" style="background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-tertiary); flex-shrink: 0; padding: 0 2px;">🗑️</button>
+                            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                                <button onclick="app.adjustFavQty(${fav.id},-0.5)" style="${btnStyle}background:var(--bg-secondary);color:var(--text-primary);">‹</button>
+                                <span id="fav-qty-${fav.id}" style="font-size:12px;font-weight:700;color:var(--text-secondary);min-width:28px;text-align:center;">${qtyLabel}</span>
+                                <button onclick="app.adjustFavQty(${fav.id},0.5)"  style="${btnStyle}background:var(--bg-secondary);color:var(--text-primary);">›</button>
+                                <button onclick="app.logFavourite(${fav.id})" style="${btnStyle}background:var(--accent-success);color:white;font-size:18px;padding:4px 10px;">+</button>
+                            </div>
+                            <button onclick="app.openEditFavourite(${fav.id})" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--text-tertiary);padding:0 2px;flex-shrink:0;">✏️</button>
+                            <button onclick="app.deleteFavourite(${fav.id})" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--text-tertiary);padding:0 2px;flex-shrink:0;">🗑️</button>
                         </div>`;
                     }).join('');
                 };
             },
 
+            adjustFavQty(id, delta) {
+                if (!this._favQty) this._favQty = {};
+                const current = this._favQty[id] || 1;
+                const next = Math.max(0.5, Math.round((current + delta) * 2) / 2);
+                this._favQty[id] = next;
+
+                const qtyEl = document.getElementById(`fav-qty-${id}`);
+                if (qtyEl) qtyEl.textContent = next % 1 === 0 ? `×${next}` : `×${next.toFixed(1)}`;
+
+                const infoEl = document.getElementById(`fav-info-${id}`);
+                if (infoEl) {
+                    const row = infoEl.closest('[data-fav-calories]');
+                    if (row) {
+                        const cal     = parseFloat(row.dataset.favCalories) || 0;
+                        const protein = parseFloat(row.dataset.favProtein)  || 0;
+                        const carbs   = parseFloat(row.dataset.favCarbs)    || 0;
+                        const fat     = parseFloat(row.dataset.favFat)      || 0;
+                        const fibre   = parseFloat(row.dataset.favFibre)    || 0;
+                        const parts = [
+                            protein ? `P ${Math.round(protein * next)}g` : '',
+                            carbs   ? `C ${Math.round(carbs   * next)}g` : '',
+                            fat     ? `F ${Math.round(fat     * next)}g` : '',
+                            fibre   ? `Fi ${Math.round(fibre  * next)}g` : '',
+                        ].filter(Boolean).join(' · ');
+                        infoEl.innerHTML = `<strong>${Math.round(cal * next)} kcal</strong>${parts ? ' &nbsp;·&nbsp; ' + parts : ''}`;
+                    }
+                }
+            },
+
             logFavourite(id) {
+                const qty = (this._favQty || {})[id] || 1;
                 const req = db.transaction(['favourites'], 'readonly').objectStore('favourites').get(id);
                 req.onsuccess = () => {
                     const fav = req.result;
                     if (!fav) return;
+                    const mul = v => v != null ? Math.round(v * qty * 10) / 10 : null;
                     const entry = {
                         date: document.getElementById('fav-date').value,
                         time: new Date().toTimeString().slice(0, 5),
                         meal_type: document.getElementById('fav-meal-type').value,
-                        food_name: fav.food_name,
+                        food_name: fav.food_name + (qty !== 1 ? ` (×${qty % 1 === 0 ? qty : qty.toFixed(1)})` : ''),
                         brand: fav.brand,
                         serving_description: fav.serving_description,
-                        calories: fav.calories,
-                        protein_g: fav.protein_g,
-                        carbs_g: fav.carbs_g,
-                        fat_g: fav.fat_g,
-                        fibre_g: fav.fibre_g,
-                        salt_g: fav.salt_g,
+                        calories: Math.round((fav.calories || 0) * qty),
+                        protein_g: mul(fav.protein_g),
+                        carbs_g:   mul(fav.carbs_g),
+                        fat_g:     mul(fav.fat_g),
+                        fibre_g:   mul(fav.fibre_g),
+                        salt_g:    mul(fav.salt_g),
                         source_type: 'favourite',
+                        sync_id: crypto.randomUUID(),
+                        updated_at: new Date().toISOString(),
                         created_at: new Date().toISOString(),
                     };
                     const tx = db.transaction(['foodEntries'], 'readwrite');
@@ -4551,6 +4847,43 @@
                 reader.readAsDataURL(file);
             },
 
+            async reanalyseWithDescription() {
+                const description = document.getElementById('review-name')?.value?.trim();
+                if (!description) { alert('Please enter a food name first.'); return; }
+                const base64 = this.currentReviewData?.image_base64;
+                if (!base64) return;
+
+                const btn = document.querySelector('[onclick="app.reanalyseWithDescription()"]');
+                if (btn) btn.textContent = '⏳ Re-analysing…';
+
+                try {
+                    const response = await fetch('https://calorie-extractor.dbeale75.workers.dev/api/extract-nutrition', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            token: this.getSyncToken(),
+                            image_base64: base64,
+                            filename: 'reanalyse.jpg',
+                            meal_type: this.currentReviewData.meal_type,
+                            date: this.currentReviewData.date,
+                            food_description: description,
+                        }),
+                    });
+                    if (!response.ok) throw new Error();
+                    const data = await response.json();
+                    this.currentReviewData = {
+                        ...data,
+                        date: this.currentReviewData.date,
+                        meal_type: this.currentReviewData.meal_type,
+                        image_base64: base64,
+                    };
+                    this.showReview();
+                } catch {
+                    if (btn) btn.textContent = '🔄 Re-analyse with corrected name';
+                    alert('Re-analysis failed. Please adjust the values manually.');
+                }
+            },
+
             showReview() {
                 const data = this.currentReviewData;
 
@@ -4568,11 +4901,17 @@
 
                 const fieldsHtml = `
                     ${(data.image_type === 'food_photo' || data.confidence || (data.warnings && data.warnings.length)) ? `
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 9px 12px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.35); border-radius: 8px;">
-                        <span style="font-size: 16px; flex-shrink: 0;">⚠️</span>
-                        <div style="font-size: 12px; font-weight: 500; color: #92400e; line-height: 1.4;">
-                            ${data.image_type === 'food_photo' ? 'Estimated from photo' : (data.warnings && data.warnings.length ? data.warnings.join(', ') : 'Review values')}${data.confidence ? ` &nbsp;·&nbsp; Confidence: <strong>${Math.round(data.confidence * 100)}%</strong>` : ''}
+                    <div style="margin-bottom: 12px; padding: 9px 12px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.35); border-radius: 8px;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:${data.image_type === 'food_photo' ? '8' : '0'}px;">
+                            <span style="font-size: 16px; flex-shrink: 0;">⚠️</span>
+                            <div style="font-size: 12px; font-weight: 500; color: #92400e; line-height: 1.4;">
+                                ${data.image_type === 'food_photo' ? 'Estimated from photo' : (data.warnings && data.warnings.length ? data.warnings.join(', ') : 'Review values')}${data.confidence ? ` &nbsp;·&nbsp; Confidence: <strong>${Math.round(data.confidence * 100)}%</strong>` : ''}
+                            </div>
                         </div>
+                        ${data.image_type === 'food_photo' ? `
+                        <div style="font-size:12px;color:#92400e;line-height:1.5;margin-bottom:8px;">If the food name below is wrong, correct it and tap <strong>Re-analyse</strong> for a better estimate.</div>
+                        <button onclick="app.reanalyseWithDescription()" style="width:100%;padding:8px;border:1px solid rgba(245,158,11,0.5);border-radius:8px;background:rgba(245,158,11,0.15);color:#92400e;font-size:12px;font-weight:600;cursor:pointer;">🔄 Re-analyse with corrected name</button>
+                        ` : ''}
                     </div>` : ''}
                     <div class="upload-form-row">
                         <label>Food</label>

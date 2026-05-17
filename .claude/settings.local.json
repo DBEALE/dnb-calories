@@ -10,7 +10,8 @@
       "Bash(wrangler deploy *)",
       "Bash(wrangler d1 *)",
       "Bash(npm run *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(wrangler tail *)"
     ]
   }
 }

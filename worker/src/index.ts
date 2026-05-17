@@ -60,6 +60,7 @@ interface Env {
   OPENROUTER_API_KEY: string;
   calorie_tracker_sync: D1Database;
   ADMIN_TOKEN: string;
+  GOOGLE_VISION_API_KEY: string;
 }
 
 interface InsightRequest {
@@ -108,6 +109,10 @@ export default {
       return handleAdmin(request, env, corsHeaders);
     }
 
+    if (pathname.endsWith('/api/admin/settings')) {
+      return handleAdminSettings(request, env, corsHeaders);
+    }
+
     if (pathname.endsWith('/api/suggestions')) {
       return handleSuggestions(request, env, corsHeaders);
     }
@@ -129,13 +134,17 @@ export default {
         if (!isValidToken(token)) {
           return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
+        const quota = await checkQuota(env, token);
+        if (!quota.allowed) {
+          return new Response(JSON.stringify({ error: 'quota_exceeded', used: quota.used, limit: quota.limit, period: quota.period }), { status: 429, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        }
         if (!body.image_base64 || !body.filename) {
           return new Response(
             JSON.stringify({ error: 'Missing image_base64 or filename' }),
             { status: 400, headers: corsHeaders }
           );
         }
-        const result = await callOpenRouter(body.image_base64, openRouterKey, body.food_description);
+        const result = await callOpenRouter(body.image_base64, openRouterKey, body.food_description, env.GOOGLE_VISION_API_KEY);
         return new Response(JSON.stringify(result), {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -160,6 +169,10 @@ export default {
         token = body.token || '';
         if (!isValidToken(token)) {
           return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        }
+        const quota = await checkQuota(env, token);
+        if (!quota.allowed) {
+          return new Response(JSON.stringify({ error: 'quota_exceeded', used: quota.used, limit: quota.limit, period: quota.period }), { status: 429, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
         const result = await callInsight(body, openRouterKey);
         return new Response(JSON.stringify(result), {
@@ -186,6 +199,10 @@ export default {
         token = body.token || '';
         if (!isValidToken(token)) {
           return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        }
+        const quota = await checkQuota(env, token);
+        if (!quota.allowed) {
+          return new Response(JSON.stringify({ error: 'quota_exceeded', used: quota.used, limit: quota.limit, period: quota.period }), { status: 429, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
         const result = await callCalorieTarget(body, openRouterKey);
         return new Response(JSON.stringify(result), {
@@ -259,6 +276,66 @@ async function handleSuggestions(request: Request, env: Env, corsHeaders: Record
   }
 
   return err('Unknown action');
+}
+
+// ── Quota ─────────────────────────────────────────────────────────────────────
+
+async function getSettings(env: Env): Promise<{ quota_requests: number; quota_period: string }> {
+  if (!env.calorie_tracker_sync) return { quota_requests: 30, quota_period: 'month' };
+  const rows = await env.calorie_tracker_sync
+    .prepare("SELECT key, value FROM settings WHERE key IN ('quota_requests','quota_period')")
+    .all<{ key: string; value: string }>();
+  const map = Object.fromEntries((rows.results ?? []).map(r => [r.key, r.value]));
+  return {
+    quota_requests: parseInt(map.quota_requests ?? '30'),
+    quota_period:   map.quota_period ?? 'month',
+  };
+}
+
+function periodSql(period: string): string {
+  if (period === 'day')   return "datetime('now', '-1 day')";
+  if (period === 'week')  return "datetime('now', '-7 days')";
+  return "datetime('now', 'start of month')"; // month (default)
+}
+
+async function checkQuota(env: Env, token: string): Promise<{ allowed: boolean; used: number; limit: number; period: string }> {
+  // Admin token is always exempt
+  if (!env.calorie_tracker_sync || token === env.ADMIN_TOKEN) return { allowed: true, used: 0, limit: 999, period: 'month' };
+  const { quota_requests, quota_period } = await getSettings(env);
+  const since = periodSql(quota_period);
+  const row = await env.calorie_tracker_sync
+    .prepare(`SELECT COUNT(*) as n FROM usage WHERE token=? AND ts >= ${since}`)
+    .bind(token).first<{ n: number }>();
+  const used = row?.n ?? 0;
+  return { allowed: used < quota_requests, used, limit: quota_requests, period: quota_period };
+}
+
+async function handleAdminSettings(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  const json = await request.json() as { token?: string; action?: string; quota_requests?: number; quota_period?: string };
+  if (json.token !== env.ADMIN_TOKEN) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  }
+  const db = env.calorie_tracker_sync;
+  const ok = (d: object) => new Response(JSON.stringify(d), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+
+  if (json.action === 'get') {
+    const settings = await getSettings(env);
+    return ok(settings);
+  }
+
+  if (json.action === 'save') {
+    const now = new Date().toISOString();
+    const validPeriods = ['day', 'week', 'month'];
+    const requests = Math.max(1, Math.min(10000, json.quota_requests ?? 30));
+    const period   = validPeriods.includes(json.quota_period ?? '') ? json.quota_period! : 'month';
+    await db.batch([
+      db.prepare("INSERT OR REPLACE INTO settings (key,value,updated_at) VALUES ('quota_requests',?,?)").bind(String(requests), now),
+      db.prepare("INSERT OR REPLACE INTO settings (key,value,updated_at) VALUES ('quota_period',?,?)").bind(period, now),
+    ]);
+    return ok({ quota_requests: requests, quota_period: period });
+  }
+
+  return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -533,7 +610,7 @@ async function callLabelModel(imageBase64: string, apiKey: string): Promise<Extr
 
 // Text-only nutrition lookup — used when the user has provided a confirmed food description.
 // Skips the image entirely so visual misidentification can't interfere.
-async function callTextNutrition(description: string, apiKey: string): Promise<ExtractResponse> {
+async function callTextNutrition(description: string, apiKey: string, confidence = 0.85): Promise<ExtractResponse> {
   const prompt = `You are a precise nutrition calculator. The user has described their meal as: "${description}"
 
 Step 1 — identify each ingredient and its quantity from the description.
@@ -564,7 +641,7 @@ Return ONLY this JSON, no other text:
   "sugar_g": null,
   "salt_g": null,
   "fibre_g": number or null,
-  "confidence": 0.85,
+  "confidence": ${confidence.toFixed(2)},
   "warnings": ["Calculated from food description — adjust if portion differs"]
 }`;
 
@@ -605,24 +682,238 @@ async function callFoodPhotoModel(imageBase64: string, apiKey: string): Promise<
   return normalizeExtraction(parseExtractResponse(content));
 }
 
-async function callOpenRouter(imageBase64: string, apiKey: string, description?: string): Promise<ExtractResponse> {
-  // If the user has confirmed the food name, skip the image entirely —
-  // visual misidentification cannot affect the result.
-  if (description) {
-    return callTextNutrition(description, apiKey);
+// Generic Vision labels that aren't useful as food descriptions
+const VISION_GENERIC = new Set([
+  'food','dish','meal','cuisine','recipe','ingredient','produce','tableware',
+  'dishware','plate','bowl','cup','glass','drink','beverage','breakfast',
+  'lunch','dinner','snack','fast food','junk food','comfort food','natural foods',
+  'whole food','superfood','health food','finger food','staple food','side dish',
+  'main course','appetizer','dessert','cooking','baking','cookware','kitchen utensil',
+  // Too vague to be useful as food names
+  'dairy product','dairy','animal product','ingredient','garnish','condiment',
+  'spread','sauce','dip','topping','filling','mixture','substance',
+]);
+
+// Gemini-powered food identification — same model family as Google AI Mode
+async function callGeminiIdentify(imageBase64: string, apiKey: string): Promise<{ food: string; confidence: number }> {
+  const prompt = `You are a food identification expert. Study this image carefully and identify the food shown.
+
+Step 1 — describe the visual characteristics: colours, textures, shapes.
+Step 2 — identify each food component based on what you see.
+Step 3 — rate your confidence honestly.
+
+COMMON CONFUSIONS:
+- Scrambled eggs are YELLOW/golden with a soft curded texture; cottage cheese is WHITE/cream and lumpy
+- Be less confident if the food could plausibly be two different things
+
+Return ONLY this JSON, nothing else:
+{"food": "specific food name e.g. scrambled eggs on wholegrain toast", "confidence": 0.85}
+
+confidence: 0.9-1.0 = clearly identifiable; 0.6-0.89 = fairly sure; 0.3-0.59 = ambiguous, could be multiple foods; below 0.3 = very uncertain`;
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://fitnesshealth.app', 'X-Title': 'FitnessHealth' },
+    body: JSON.stringify({
+      model: 'google/gemini-2.0-flash-001',
+      max_tokens: 60,
+      temperature: 0,
+      messages: [{ role: 'user', content: [
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+        { type: 'text', text: prompt },
+      ]}],
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini identify error: ${res.status} ${await res.text().catch(() => '')}`);
+  const content = (parseModelContent(await res.json()) ?? '').trim();
+  const INVALID = new Set(['none','null','n/a','unknown','unclear','cannot determine','uncertain']);
+  const sanitise = (s: string) => INVALID.has(s.toLowerCase().trim()) ? '' : s.trim();
+
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        food: sanitise(String(parsed.food ?? '')),
+        confidence: Math.min(1, Math.max(0, parseFloat(parsed.confidence) || 0.5)),
+      };
+    }
+  } catch { /* fall through */ }
+  // Model returned plain text — use it if it looks like a real food name
+  return { food: sanitise(content), confidence: 0.5 };
+}
+
+async function callGoogleVision(imageBase64: string, visionKey: string): Promise<string> {
+  const res = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${visionKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{
+        image: { content: imageBase64 },
+        features: [
+          { type: 'LABEL_DETECTION', maxResults: 15 },
+          { type: 'OBJECT_LOCALIZATION', maxResults: 8 },
+        ],
+      }],
+    }),
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`Google Vision error: ${res.status} — ${errBody.slice(0, 200)}`);
+  }
+  const data = await res.json() as any;
+  const r = data.responses?.[0];
+
+  const isSpecific = (s: string) => !VISION_GENERIC.has(s.toLowerCase());
+
+  const labels: string[] = (r?.labelAnnotations ?? [])
+    .filter((l: any) => l.score > 0.75 && isSpecific(l.description))
+    .map((l: any) => l.description as string)
+    .slice(0, 5);
+
+  const objects: string[] = (r?.localizedObjectAnnotations ?? [])
+    .filter((o: any) => o.score > 0.6 && isSpecific(o.name))
+    .map((o: any) => o.name as string);
+
+  // Remove labels that are substrings of other labels (e.g. "Bread" when "Sliced bread" exists)
+  const combined = [...new Set([...labels, ...objects])];
+  const deduped = combined.filter(a =>
+    !combined.some(b => b !== a && b.toLowerCase().includes(a.toLowerCase()))
+  ).slice(0, 4);
+  return deduped.join(', ');
+}
+
+function deltaConfidence(
+  visualCal: number | null,
+  textCal: number | null,
+  identConfidence: number
+): { confidence: number; deltaNote: string } {
+  // Need both estimates to be meaningful (> 50 kcal) before comparing
+  if (!visualCal || !textCal || visualCal < 50 || textCal < 50) {
+    return { confidence: identConfidence, deltaNote: '' };
+  }
+  const delta = Math.abs(visualCal - textCal) / Math.max(visualCal, textCal);
+  let confidence: number;
+  let deltaNote = '';
+
+  if (delta < 0.10) {
+    // < 10% — both models agree closely
+    confidence = Math.min(0.95, identConfidence + 0.08);
+  } else if (delta < 0.25) {
+    // 10–25% — normal portion size variation
+    confidence = identConfidence;
+  } else if (delta < 0.50) {
+    // 25–50% — notable disagreement, likely wrong identification
+    confidence = Math.max(0.25, identConfidence - 0.20);
+    deltaNote = `visual ~${Math.round(visualCal)} kcal vs text ~${Math.round(textCal)} kcal`;
+  } else {
+    // > 50% — strong signal something is wrong
+    confidence = Math.max(0.15, identConfidence - 0.35);
+    deltaNote = `large mismatch: visual ~${Math.round(visualCal)} kcal vs text ~${Math.round(textCal)} kcal`;
   }
 
-  // First call: gpt-4o-mini to detect image type and extract (great for labels)
+  return { confidence: Math.round(confidence * 100) / 100, deltaNote };
+}
+
+// Image + confirmed name: use image for portion sizing, description as food anchor
+async function callPortionFromImage(imageBase64: string, description: string, apiKey: string): Promise<ExtractResponse> {
+  const prompt = `The user has confirmed this meal is: "${description}"
+
+Your task: estimate the PORTION SIZE from the image and calculate nutrition for that portion.
+Do NOT try to identify the food — the name is already confirmed.
+
+Look at the image:
+- How many pieces/items are visible?
+- How large is the portion vs a typical serving?
+- Estimate weight if possible
+
+Return ONLY this JSON:
+{
+  "image_type": "food_photo",
+  "food_name": "${description}",
+  "brand": null,
+  "serving_size_text": "estimated from image",
+  "servings": 1,
+  "per_pack": false,
+  "calories_kcal": number,
+  "protein_g": number,
+  "carbs_g": number,
+  "fat_g": number,
+  "sugar_g": null,
+  "salt_g": null,
+  "fibre_g": null,
+  "confidence": 0.82,
+  "warnings": ["Portion estimated from image; food name confirmed by user"]
+}`;
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://fitnesshealth.app', 'X-Title': 'FitnessHealth' },
+    body: JSON.stringify({
+      model: 'google/gemini-2.0-flash-001', max_tokens: 400, temperature: 0,
+      messages: [{ role: 'user', content: [
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+        { type: 'text', text: prompt },
+      ]}],
+    }),
+  });
+  if (!res.ok) throw new Error(`Portion model error: ${res.status}`);
+  const content = parseModelContent(await res.json());
+  if (!content) throw new Error('No content from portion model');
+  const result = normalizeExtraction(parseExtractResponse(content)) as any;
+  result.food_name = description; // always honour confirmed name
+  result.text_only_lookup = false; // image WAS used (for portion)
+  return result;
+}
+
+async function callOpenRouter(imageBase64: string, apiKey: string, description?: string, visionKey?: string): Promise<ExtractResponse> {
+  // Image + confirmed description: best path — image for portion, description for food name
+  if (description && imageBase64) {
+    try {
+      return await callPortionFromImage(imageBase64, description, apiKey);
+    } catch (err) {
+      console.warn('Portion model failed, falling back to text-only:', err);
+      return callTextNutrition(description, apiKey, 0.85);
+    }
+  }
+  // Description only — no image
+  if (description) {
+    return callTextNutrition(description, apiKey, 0.92);
+  }
+
+  // First call: gpt-4o-mini detects label vs food photo AND produces a visual nutrition estimate
   const initial = await callLabelModel(imageBase64, apiKey);
 
-  // If it's a food photo, re-run with gemini-flash-1.5 for better estimation
   if (initial.image_type === 'food_photo') {
+    let diag = '';
+    let result = initial;
+
     try {
-      return await callFoodPhotoModel(imageBase64, apiKey);
+      const { food, confidence: identConf } = await callGeminiIdentify(imageBase64, apiKey);
+      if (food) {
+        const textResult = await callTextNutrition(food, apiKey, identConf);
+
+        // Compare visual estimate (gpt-4o-mini) vs text-based (from identified name)
+        const { confidence, deltaNote } = deltaConfidence(
+          initial.calories_kcal,
+          textResult.calories_kcal,
+          identConf
+        );
+        textResult.confidence = confidence;
+
+        diag = deltaNote
+          ? `Identified as: "${food}" — ${deltaNote}`
+          : `Identified as: "${food}"`;
+        result = textResult;
+      } else {
+        result = await callFoodPhotoModel(imageBase64, apiKey).catch(() => initial);
+      }
     } catch (err) {
-      console.warn('Food photo model failed, using gpt-4o-mini result:', err);
-      return initial;
+      result = await callFoodPhotoModel(imageBase64, apiKey).catch(() => initial);
     }
+
+    (result as any).diag = diag;
+    return result;
   }
 
   return initial;

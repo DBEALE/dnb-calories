@@ -11,7 +11,8 @@
       "Bash(wrangler d1 *)",
       "Bash(npm run *)",
       "WebSearch",
-      "Bash(wrangler tail *)"
+      "Bash(wrangler tail *)",
+      "Bash(.\\\\deploy.ps1 -SiteOnly)"
     ]
   }
 }

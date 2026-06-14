@@ -438,6 +438,8 @@
 
         .modal.active {
             display: flex;
+            flex-direction: column;
+            align-items: center;
             justify-content: flex-end;
         }
 
@@ -446,7 +448,13 @@
             width: 100%;
             max-width: 100%;
             height: 100vh;
-            overflow-y: auto;
+            height: 100dvh;
+            max-height: 100vh;
+            max-height: 100dvh;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             animation: slideUp 0.35s cubic-bezier(0.32, 0.72, 0, 1);
             border-radius: 24px 24px 0 0;
         }
@@ -467,6 +475,7 @@
             background: white;
             z-index: 201;
             border-radius: 24px 24px 0 0;
+            flex-shrink: 0;
         }
 
         .modal-header h2 {
@@ -491,7 +500,19 @@
 
         .modal-body {
             padding: 16px 20px;
-            padding-bottom: 48px;
+            padding-bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 24px));
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #modal-upload #add-food-btn {
+            position: sticky;
+            bottom: max(0px, env(safe-area-inset-bottom, 0px));
+            z-index: 2;
+            box-shadow: 0 -8px 18px var(--bg-primary), 0 6px 14px rgba(14,165,233,0.24);
         }
 
         /* Charts */
@@ -1172,20 +1193,19 @@
     <div class="modal" id="modal-upload">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add Food</h2>
+                <div>
+                    <h2 style="margin-bottom:2px;">Add Food</h2>
+                    <div style="font-size:11px;color:var(--text-tertiary);font-weight:400;">Tap Camera or Gallery below to select an image</div>
+                </div>
                 <button class="close-btn" onclick="app.closeModal('upload')">✕</button>
             </div>
             <div class="modal-body">
                 <!-- Hidden file inputs -->
                 <input type="file" id="upload-file"   accept="image/*"                    style="display:none;" onchange="app.previewImage('upload-file')">
                 <input type="file" id="upload-camera" accept="image/*" capture="environment" style="display:none;" onchange="app.previewImage('upload-camera')">
-                <div style="font-size:12px;color:var(--text-secondary);background:var(--bg-secondary);border-radius:8px;padding:10px 12px;margin-bottom:10px;line-height:1.5;">
-                    Add a description, a photo, or both. Using both usually improves accuracy.
-                </div>
-                <!-- Image preview -->
-                <div id="upload-image-area" style="display:block;margin-bottom:10px;">
+                <!-- Image preview (only shown once an image is chosen) -->
+                <div id="upload-image-area" style="margin-bottom:10px;">
                     <img id="upload-preview" style="max-width:100%;border-radius:8px;display:none;">
-                    <div id="upload-no-image" style="display:flex;align-items:center;justify-content:center;height:80px;background:var(--bg-secondary);border-radius:8px;border:2px dashed var(--border-color);font-size:12px;color:var(--text-tertiary);">Tap Camera or Gallery below to select an image</div>
                 </div>
                 <div style="display:flex;gap:8px;margin-bottom:10px;">
                     <button onclick="app.selectUploadImage('camera')" style="flex:1;padding:10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;font-weight:600;">📷 Camera</button>
@@ -1197,8 +1217,8 @@
                     <div style="flex:1;">
                         <textarea id="upload-description" rows="2" placeholder="e.g. 2 wholegrain toast with scrambled eggs"
                             style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);color:var(--text-primary);font-size:13px;font-family:inherit;resize:none;line-height:1.5;"></textarea>
-                        <div style="font-size:11px;color:var(--accent-info);margin-top:4px;line-height:1.4;">
-                            ✨ Image + description uses the photo for portion sizing — more accurate than either alone
+                        <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;line-height:1.4;">
+                            Add a description, a photo, or both — combining them gives the most accurate result.
                         </div>
                     </div>
                 </div>
@@ -1629,7 +1649,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 52;
+        const APP_BUILD = 54;
 
         const TUTORIAL = [
             {
@@ -1766,6 +1786,32 @@
         ];
 
         const CHANGELOG = [
+            {
+                date: '2026-06-14',
+                title: 'Add Food mobile scrolling fix',
+                items: [
+                    'Add Food now uses the phone\'s visible dynamic viewport instead of the unreliable full browser height',
+                    'Modal content scrolls independently beneath its fixed header',
+                    'Analyse stays reachable at the bottom of the screen, including above mobile safe-area controls',
+                ]
+            },
+            {
+                date: '2026-05-23',
+                title: 'Add Food & Review polish',
+                items: [
+                    'Removed the dashed "Tap Camera or Gallery" placeholder — moved as a small subtitle under the Add Food heading',
+                    'Fixed Review & Confirm Qty stepper overflowing the screen on narrow displays',
+                ]
+            },
+            {
+                date: '2026-05-17',
+                title: 'Tidier Add Food layout',
+                items: [
+                    'Removed the duplicate help banner that looked like an empty input field',
+                    'Replaced with a single neutral hint below the description explaining all three modes',
+                    'Description-only requests now work (worker accepts requests without an image)',
+                ]
+            },
             {
                 date: '2026-05-17',
                 title: 'Log screen weight shortcuts',
@@ -5105,7 +5151,7 @@
                     salt:     data.salt_g,
                 };
 
-                const btnStyle = `background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:16px;line-height:1;font-weight:700;`;
+                const btnStyle = `background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1;font-weight:700;flex-shrink:0;min-width:32px;`;
 
                 const fieldsHtml = `
                     ${(data.image_type === 'food_photo' || (data.warnings && data.warnings.length)) ? `
@@ -5147,11 +5193,11 @@
                         <label>Serving</label>
                         <input type="text" id="review-serving" value="${data.serving_size_text || ''}">
                     </div>
-                    <div class="upload-form-row" style="padding:10px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);margin:8px 0;">
+                    <div class="upload-form-row" style="padding:10px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);margin:8px 0;min-width:0;">
                         <label>Qty</label>
                         <button onclick="app.stepReviewQty(-1)" style="${btnStyle}">‹</button>
                         <input type="number" id="review-qty" value="1" step="any" min="0.01"
-                            style="flex:1;text-align:center;font-weight:700;font-size:16px;"
+                            style="flex:1;min-width:0;text-align:center;font-weight:700;font-size:16px;"
                             onchange="app.updateReviewQty(parseFloat(this.value)||1)">
                         <button onclick="app.stepReviewQty(1)" style="${btnStyle}">›</button>
                     </div>

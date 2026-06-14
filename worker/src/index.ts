@@ -138,13 +138,13 @@ export default {
         if (!quota.allowed) {
           return new Response(JSON.stringify({ error: 'quota_exceeded', used: quota.used, limit: quota.limit, period: quota.period }), { status: 429, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
-        if (!body.image_base64 || !body.filename) {
+        if (!body.image_base64 && !body.food_description) {
           return new Response(
-            JSON.stringify({ error: 'Missing image_base64 or filename' }),
+            JSON.stringify({ error: 'Provide image_base64 or food_description' }),
             { status: 400, headers: corsHeaders }
           );
         }
-        const result = await callOpenRouter(body.image_base64, openRouterKey, body.food_description, env.GOOGLE_VISION_API_KEY);
+        const result = await callOpenRouter(body.image_base64 ?? '', openRouterKey, body.food_description, env.GOOGLE_VISION_API_KEY);
         return new Response(JSON.stringify(result), {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },

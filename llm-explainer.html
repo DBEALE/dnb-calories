@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="An interactive, visual explanation of how large language models work.">
+  <title>Inside an LLM - Interactive Explainer</title>
+  <style>
+    :root {
+      --ink: #17211b;
+      --muted: #657168;
+      --paper: #f7f3e9;
+      --card: #fffdf7;
+      --line: #d9d6ca;
+      --green: #176b4d;
+      --green-2: #2a9870;
+      --lime: #b9de69;
+      --yellow: #f4c95d;
+      --coral: #ee765d;
+      --blue: #6aa9d8;
+      --purple: #8d7cc3;
+      --shadow: 0 18px 50px rgba(38, 48, 41, .09);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 12%, rgba(185,222,105,.18), transparent 24rem),
+        radial-gradient(circle at 90% 32%, rgba(106,169,216,.12), transparent 24rem),
+        var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    button, input, textarea { font: inherit; }
+    button { color: inherit; }
+    a { color: inherit; }
+    svg { display: block; }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .025;
+      z-index: 20;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+    }
+
+    .topbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 68px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 clamp(18px, 4vw, 56px);
+      background: rgba(247,243,233,.88);
+      border-bottom: 1px solid rgba(23,33,27,.09);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      background: var(--ink);
+      color: var(--lime);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
+    }
+
+    .brand-mark svg { width: 21px; height: 21px; }
+
+    .progress-wrap {
+      flex: 1;
+      max-width: 560px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .progress-track {
+      flex: 1;
+      height: 6px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #dedbd0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--green), var(--lime));
+      transition: width .2s ease;
+    }
+
+    .top-link {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.5);
+      padding: 8px 12px;
+      border-radius: 99px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    main { overflow: hidden; }
+    section { scroll-margin-top: 68px; }
+
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(350px, .9fr);
+      align-items: center;
+      gap: clamp(36px, 6vw, 90px);
+      padding: 120px clamp(24px, 7vw, 110px) 70px;
+      position: relative;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 22px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 24px;
+      height: 2px;
+      background: currentColor;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      max-width: 720px;
+      margin-bottom: 22px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(54px, 7.4vw, 112px);
+      font-weight: 500;
+      line-height: .91;
+      letter-spacing: -.065em;
+    }
+
+    h1 em {
+      color: var(--green);
+      font-weight: inherit;
+    }
+
+    .hero-copy > p {
+      max-width: 600px;
+      color: var(--muted);
+      font-size: clamp(17px, 1.5vw, 21px);
+    }
+
+    .hero-copy { min-width: 0; }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 99px;
+      padding: 13px 19px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      cursor: pointer;
+      text-decoration: none;
+      font-weight: 800;
+      transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+
+    .btn:hover { transform: translateY(-2px); }
+    .btn.primary {
+      color: white;
+      background: var(--ink);
+      box-shadow: 0 10px 25px rgba(23,33,27,.18);
+    }
+    .btn.secondary { border: 1px solid var(--line); background: rgba(255,255,255,.45); }
+    .btn.small { padding: 9px 14px; font-size: 13px; }
+
+    .hero-visual {
+      min-height: 520px;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .brain-orbit {
+      width: min(100%, 540px);
+      aspect-ratio: 1;
+      position: relative;
+      display: grid;
+      place-items: center;
+    }
+
+    .orbit {
+      position: absolute;
+      border: 1px dashed rgba(23,33,27,.2);
+      border-radius: 50%;
+      animation: spin 24s linear infinite;
+    }
+    .orbit.one { inset: 5%; }
+    .orbit.two { inset: 18%; animation-direction: reverse; animation-duration: 18s; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .orbit-dot {
+      position: absolute;
+      top: 48%;
+      left: -6px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--coral);
+      box-shadow: 0 0 0 6px rgba(238,118,93,.12);
+    }
+    .orbit.two .orbit-dot { background: var(--blue); top: 18%; left: auto; right: 5%; }
+
+    .brain {
+      width: 58%;
+      aspect-ratio: 1;
+      border-radius: 44% 56% 50% 50% / 48% 48% 52% 52%;
+      position: relative;
+      overflow: hidden;
+      background: var(--ink);
+      box-shadow: 0 35px 90px rgba(23,33,27,.24);
+    }
+
+    .brain-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(185,222,105,.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(185,222,105,.12) 1px, transparent 1px);
+      background-size: 28px 28px;
+      transform: rotate(-8deg) scale(1.2);
+    }
+
+    .neuron {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 16px var(--lime);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    .neuron::before, .neuron::after {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      width: 80px;
+      height: 1px;
+      transform-origin: left;
+      background: linear-gradient(90deg, rgba(185,222,105,.7), transparent);
+    }
+    .neuron::after { transform: rotate(95deg); width: 55px; }
+    .n1 { top: 25%; left: 26%; }
+    .n2 { top: 39%; left: 61%; animation-delay: -.8s; }
+    .n2::before { transform: rotate(145deg); }
+    .n3 { top: 68%; left: 38%; animation-delay: -1.5s; }
+    .n3::before { transform: rotate(-45deg); }
+    .n4 { top: 70%; left: 73%; animation-delay: -.4s; }
+    .n4::before { transform: rotate(205deg); }
+    @keyframes pulse { 50% { transform: scale(1.5); opacity: .65; } }
+
+    .floating-label {
+      position: absolute;
+      padding: 9px 13px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,253,247,.9);
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      font-weight: 800;
+      backdrop-filter: blur(8px);
+    }
+    .fl-1 { top: 17%; left: 1%; transform: rotate(-5deg); }
+    .fl-2 { right: 0; top: 30%; transform: rotate(5deg); }
+    .fl-3 { bottom: 14%; left: 8%; transform: rotate(3deg); }
+    .fl-4 { bottom: 8%; right: 10%; transform: rotate(-4deg); }
+
+    .scroll-cue {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+    .scroll-cue::after {
+      content: "";
+      display: block;
+      width: 1px;
+      height: 34px;
+      margin: 8px auto -48px;
+      background: var(--ink);
+    }
+
+    .chapter {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 120px 0;
+    }
+
+    .chapter-head {
+      display: grid;
+      grid-template-columns: 100px minmax(0, 700px);
+      gap: 24px;
+      margin-bottom: 55px;
+    }
+
+    .chapter-num {
+      color: var(--green);
+      font-family: Georgia, serif;
+      font-size: 18px;
+      font-style: italic;
+    }
+
+    h2 {
+      margin-bottom: 18px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(40px, 5vw, 72px);
+      line-height: .98;
+      font-weight: 500;
+      letter-spacing: -.045em;
+    }
+    .chapter-intro { color: var(--muted); font-size: 18px; max-width: 680px; }
+
+    .stage {
+      background: var(--card);
+      border: 1px solid rgba(23,33,27,.1);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .stage-bar {
+      min-height: 56px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: rgba(255,255,255,.35);
+    }
+    .stage-title { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 850; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 4px rgba(42,152,112,.12); }
+    .stage-hint { color: var(--muted); font-size: 12px; }
+    .stage-body { padding: clamp(22px, 4vw, 46px); }
+
+    .big-idea {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+
+    .prompt-box {
+      border: 1px solid var(--line);
+      padding: 24px;
+      border-radius: 18px;
+      background: white;
+    }
+    .prompt-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .prompt-line { font-family: Georgia, serif; font-size: clamp(23px, 3vw, 35px); line-height: 1.3; }
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      margin-left: 3px;
+      vertical-align: -.1em;
+      background: var(--green);
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .prediction-list { display: grid; gap: 10px; margin: 18px 0; }
+    .prediction {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 13px;
+      display: grid;
+      grid-template-columns: 68px 1fr 46px;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border .2s ease, transform .2s ease;
+      background: rgba(255,255,255,.55);
+    }
+    .prediction:hover { transform: translateX(3px); border-color: var(--green); }
+    .prediction-word { font-weight: 800; }
+    .prob-bar { height: 8px; border-radius: 99px; background: #e9e7df; overflow: hidden; }
+    .prob-fill { height: 100%; border-radius: inherit; background: var(--green-2); transform-origin: left; animation: grow .7s ease both; }
+    @keyframes grow { from { transform: scaleX(0); } }
+    .prediction-pct { color: var(--muted); font-size: 12px; text-align: right; }
+
+    .callout {
+      padding: 17px 19px;
+      border-left: 4px solid var(--yellow);
+      border-radius: 4px 12px 12px 4px;
+      background: rgba(244,201,93,.14);
+      color: #514524;
+      font-size: 14px;
+    }
+
+    .formula {
+      font-family: Georgia, serif;
+      font-size: clamp(26px, 3vw, 40px);
+      text-align: center;
+    }
+    .formula .arrow { color: var(--green); padding: 0 10px; }
+
+    .tokenizer-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr);
+      gap: 36px;
+    }
+    .text-input {
+      width: 100%;
+      resize: vertical;
+      min-height: 92px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: white;
+      padding: 15px;
+      color: var(--ink);
+      outline: none;
+    }
+    .text-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23,107,77,.08); }
+    .tokens {
+      min-height: 110px;
+      padding: 20px 0;
+      display: flex;
+      align-items: flex-start;
+      align-content: flex-start;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    .token {
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 14px;
+      cursor: default;
+      transition: transform .2s ease;
+    }
+    .token:hover { transform: translateY(-3px); }
+    .token:nth-child(5n+1) { background: rgba(244,201,93,.45); }
+    .token:nth-child(5n+2) { background: rgba(106,169,216,.35); }
+    .token:nth-child(5n+3) { background: rgba(238,118,93,.3); }
+    .token:nth-child(5n+4) { background: rgba(185,222,105,.4); }
+    .token:nth-child(5n) { background: rgba(141,124,195,.28); }
+
+    .stat-stack { display: grid; gap: 12px; }
+    .mini-stat {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 15px 16px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: rgba(255,255,255,.45);
+    }
+    .mini-stat span { color: var(--muted); font-size: 13px; }
+    .mini-stat strong { font-family: Georgia, serif; font-size: 23px; }
+
+    .embedding-layout {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 36px;
+    }
+    .word-picker { display: flex; gap: 8px; flex-wrap: wrap; align-content: flex-start; }
+    .word-chip {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 99px;
+      padding: 8px 13px;
+      cursor: pointer;
+      font-weight: 750;
+      transition: .2s ease;
+    }
+    .word-chip:hover, .word-chip.active { color: white; border-color: var(--green); background: var(--green); }
+    .map-wrap {
+      min-height: 430px;
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(23,33,27,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(23,33,27,.06) 1px, transparent 1px),
+        white;
+      background-size: 44px 44px;
+    }
+    .axis-x, .axis-y { position: absolute; background: rgba(23,33,27,.22); }
+    .axis-x { left: 0; right: 0; top: 50%; height: 1px; }
+    .axis-y { top: 0; bottom: 0; left: 50%; width: 1px; }
+    .map-point {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--green);
+      border: 2px solid white;
+      box-shadow: 0 2px 7px rgba(23,33,27,.25);
+      transition: transform .25s ease, box-shadow .25s ease;
+      cursor: pointer;
+    }
+    .map-point::after {
+      content: attr(data-word);
+      position: absolute;
+      left: 50%;
+      top: 12px;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .map-point.active { transform: translate(-50%, -50%) scale(1.6); box-shadow: 0 0 0 7px rgba(23,107,77,.16); z-index: 2; }
+    .map-point.food { background: var(--coral); }
+    .map-point.tech { background: var(--blue); }
+    .map-caption { color: var(--muted); font-size: 13px; margin-top: 12px; }
+
+    .attention-controls { margin-bottom: 24px; }
+    .sentence-tokens { display: flex; gap: 8px; flex-wrap: wrap; }
+    .attn-token {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-weight: 750;
+      transition: .2s ease;
+    }
+    .attn-token.active { color: white; border-color: var(--ink); background: var(--ink); }
+    .attention-viz {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 28px;
+      align-items: center;
+    }
+    .attn-svg {
+      width: 100%;
+      min-height: 330px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: white;
+    }
+    .attn-explanation h3 { font-family: Georgia, serif; font-size: 28px; margin-bottom: 8px; }
+    .attn-explanation p { color: var(--muted); font-size: 14px; }
+    .weight-row { display: grid; grid-template-columns: 70px 1fr 35px; align-items: center; gap: 8px; margin: 9px 0; font-size: 12px; }
+    .weight-track { height: 7px; background: #e9e7df; border-radius: 10px; overflow: hidden; }
+    .weight-fill { height: 100%; background: var(--coral); border-radius: inherit; transition: width .35s ease; }
+
+    .machine {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr) 150px;
+      align-items: center;
+      gap: 22px;
+    }
+    .machine-io {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: white;
+      text-align: center;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+    }
+    .layer-stack { display: grid; gap: 8px; perspective: 800px; }
+    .layer {
+      min-height: 58px;
+      border: 1px solid rgba(23,33,27,.13);
+      border-radius: 12px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card);
+      box-shadow: 0 5px 12px rgba(23,33,27,.05);
+      cursor: pointer;
+      transition: transform .2s ease, background .2s ease;
+    }
+    .layer:hover, .layer.active { transform: translateX(8px); background: rgba(185,222,105,.25); }
+    .layer-name { font-weight: 850; }
+    .layer-job { color: var(--muted); font-size: 12px; }
+    .flow-arrow { text-align: center; color: var(--green); font-size: 28px; }
+    .layer-detail {
+      margin-top: 24px;
+      min-height: 90px;
+      padding: 18px 20px;
+      background: var(--ink);
+      color: white;
+      border-radius: 14px;
+    }
+    .layer-detail strong { color: var(--lime); }
+
+    .training-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
+      gap: 34px;
+    }
+    .training-canvas {
+      min-height: 360px;
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: white;
+      overflow: hidden;
+    }
+    .training-node {
+      position: absolute;
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--green);
+      font-size: 12px;
+      font-weight: 850;
+      z-index: 2;
+      box-shadow: 0 8px 20px rgba(23,107,77,.2);
+    }
+    .tn-1 { left: 8%; top: 44%; }
+    .tn-2 { left: 43%; top: 18%; background: var(--purple); }
+    .tn-3 { left: 43%; bottom: 18%; background: var(--coral); }
+    .tn-4 { right: 8%; top: 44%; background: var(--ink); }
+    .train-line {
+      position: absolute;
+      height: 3px;
+      background: var(--line);
+      transform-origin: left center;
+      overflow: hidden;
+    }
+    .train-line::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, var(--lime), transparent);
+      transform: translateX(-100%);
+    }
+    .training-canvas.running .train-line::after { animation: signal 1.4s linear infinite; }
+    @keyframes signal { to { transform: translateX(100%); } }
+    .tl-1 { width: 35%; left: 13%; top: 50%; transform: rotate(-28deg); }
+    .tl-2 { width: 35%; left: 13%; top: 50%; transform: rotate(28deg); }
+    .tl-3 { width: 37%; left: 48%; top: 25%; transform: rotate(28deg); }
+    .tl-4 { width: 37%; left: 48%; top: 75%; transform: rotate(-28deg); }
+    .loss-display {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border-radius: 99px;
+      color: var(--muted);
+      background: var(--paper);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .step-list { counter-reset: steps; display: grid; gap: 14px; }
+    .train-step {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .train-step::before {
+      counter-increment: steps;
+      content: counter(steps);
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: var(--green);
+      background: rgba(23,107,77,.1);
+      font-weight: 850;
+    }
+    .train-step.active { color: var(--ink); }
+    .train-step.active::before { color: white; background: var(--green); }
+
+    .sampling-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 38px;
+    }
+    .sample-output {
+      min-height: 148px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 24px;
+      background: white;
+      font-family: Georgia, serif;
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1.35;
+    }
+    .chosen-word {
+      display: inline-block;
+      color: var(--green);
+      background: rgba(185,222,105,.32);
+      border-radius: 6px;
+      padding: 0 5px;
+      animation: pop .3s ease;
+    }
+    @keyframes pop { 50% { transform: scale(1.12); } }
+    .slider-block { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.5); }
+    .slider-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .slider-head strong { font-size: 14px; }
+    .slider-value { font-family: Georgia, serif; color: var(--green); font-size: 28px; }
+    input[type="range"] { width: 100%; accent-color: var(--green); }
+    .slider-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+    .distribution { display: flex; align-items: end; gap: 8px; height: 130px; margin: 20px 0 6px; }
+    .dist-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 5px; }
+    .dist-bar { width: 100%; min-height: 3px; border-radius: 5px 5px 2px 2px; background: var(--blue); transition: height .3s ease; }
+    .dist-word { color: var(--muted); font-size: 10px; }
+
+    .limits-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .limit-card {
+      min-height: 190px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: rgba(255,255,255,.5);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .limit-card:hover { transform: translateY(-5px); box-shadow: 0 14px 30px rgba(23,33,27,.08); }
+    .limit-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 18px;
+      border-radius: 12px;
+      background: rgba(238,118,93,.16);
+      color: var(--coral);
+    }
+    .limit-card:nth-child(2) .limit-icon { background: rgba(106,169,216,.16); color: #397dad; }
+    .limit-card:nth-child(3) .limit-icon { background: rgba(244,201,93,.2); color: #9d7211; }
+    .limit-card:nth-child(4) .limit-icon { background: rgba(141,124,195,.15); color: var(--purple); }
+    .limit-card h3 { margin-bottom: 8px; font-size: 17px; }
+    .limit-card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 10px;
+    }
+    .pipe-step {
+      min-width: 145px;
+      flex: 1;
+      min-height: 150px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: white;
+      transition: .2s ease;
+      cursor: pointer;
+    }
+    .pipe-step:hover, .pipe-step.active { color: white; border-color: var(--green); background: var(--green); transform: translateY(-4px); }
+    .pipe-num { opacity: .55; font-family: Georgia, serif; font-style: italic; }
+    .pipe-step h3 { margin: 28px 0 7px; font-size: 15px; }
+    .pipe-step p { margin: 0; opacity: .7; font-size: 12px; }
+    .pipe-arrow { display: grid; place-items: center; color: var(--green); font-size: 20px; }
+    .pipeline-detail { margin-top: 18px; padding: 18px 20px; border-radius: 14px; background: var(--ink); color: white; min-height: 84px; }
+    .pipeline-detail strong { color: var(--lime); }
+
+    .finale {
+      width: min(1180px, calc(100% - 40px));
+      margin: 40px auto;
+      padding: clamp(44px, 8vw, 90px);
+      border-radius: 30px;
+      color: white;
+      background:
+        radial-gradient(circle at 80% 20%, rgba(185,222,105,.2), transparent 22rem),
+        var(--ink);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .finale h2 { max-width: 780px; margin: 0 auto 22px; }
+    .finale p { max-width: 680px; margin: 0 auto 30px; color: rgba(255,255,255,.68); font-size: 18px; }
+    .finale .btn { background: var(--lime); color: var(--ink); }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 45px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .65s ease, transform .65s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; padding-top: 120px; }
+      .hero-visual { min-height: 400px; }
+      .brain-orbit { max-width: 430px; }
+      .big-idea, .tokenizer-layout, .embedding-layout, .attention-viz, .training-layout, .sampling-layout { grid-template-columns: 1fr; }
+      .machine { grid-template-columns: 1fr; }
+      .flow-arrow { transform: rotate(90deg); }
+      .machine-io { max-width: 300px; margin: auto; width: 100%; }
+      .chapter-head { grid-template-columns: 60px 1fr; }
+      .attention-viz { gap: 18px; }
+      .attn-explanation { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    }
+
+    @media (max-width: 620px) {
+      .topbar { height: 58px; padding: 0 14px; }
+      .progress-wrap span, .top-link { display: none; }
+      .hero { min-height: auto; padding: 105px 20px 75px; gap: 15px; }
+      h1 { font-size: 49px; letter-spacing: -.06em; }
+      .hero-actions { align-items: flex-start; flex-direction: column; }
+      .hero-actions > span { display: block; }
+      .hero-visual { min-height: 340px; }
+      .floating-label { font-size: 10px; }
+      .fl-2 { right: 4%; }
+      .fl-4 { right: 7%; }
+      .chapter { width: min(100% - 26px, 1180px); padding: 82px 0; }
+      .chapter-head { display: block; margin-bottom: 32px; }
+      .chapter-num { display: block; margin-bottom: 10px; }
+      .stage-body { padding: 18px; }
+      .stage-hint { display: none; }
+      .prediction { grid-template-columns: 58px 1fr 40px; gap: 8px; }
+      .embedding-layout { gap: 20px; }
+      .map-wrap { min-height: 360px; }
+      .attn-explanation { grid-template-columns: 1fr; }
+      .limits-grid { grid-template-columns: 1fr; }
+      .pipeline { align-items: center; }
+      .pipe-step { min-width: 130px; }
+      .pipe-arrow { min-width: 16px; }
+      .finale { width: calc(100% - 26px); margin: 20px auto; padding: 55px 22px; }
+      footer { flex-direction: column; width: calc(100% - 30px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 8.5 12 4l7 4.5v7L12 20l-7-4.5v-7Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/><path d="m7 9 3.2 2M17 9l-3.2 2M12 14.5V18" stroke="currentColor" stroke-width="1.4"/></svg>
+      </span>
+      Inside an LLM
+    </div>
+    <div class="progress-wrap">
+      <span>YOUR PROGRESS</span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <span id="progressLabel">0%</span>
+    </div>
+    <a class="top-link" href="#whole-picture">Skip to full picture</a>
+  </header>
+
+  <main>
+    <section class="hero" id="start">
+      <div class="hero-copy">
+        <span class="eyebrow">A visual field guide</span>
+        <h1>How does an <em>LLM</em> actually work?</h1>
+        <p>Start with one simple idea. Then build it, piece by piece, into the machine behind modern AI chat.</p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#simple-idea">Start from zero <span aria-hidden="true">↓</span></a>
+          <span style="color:var(--muted);font-size:13px">About 8 minutes · fully interactive</span>
+        </div>
+      </div>
+      <div class="hero-visual" aria-label="Animated network illustration">
+        <div class="brain-orbit">
+          <div class="orbit one"><i class="orbit-dot"></i></div>
+          <div class="orbit two"><i class="orbit-dot"></i></div>
+          <div class="brain">
+            <div class="brain-grid"></div>
+            <i class="neuron n1"></i><i class="neuron n2"></i><i class="neuron n3"></i><i class="neuron n4"></i>
+          </div>
+          <span class="floating-label fl-1">tokens</span>
+          <span class="floating-label fl-2">attention</span>
+          <span class="floating-label fl-3">probability</span>
+          <span class="floating-label fl-4">billions of weights</span>
+        </div>
+      </div>
+      <div class="scroll-cue">scroll to learn</div>
+    </section>
+
+    <section class="chapter" id="simple-idea">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">01</span>
+        <div>
+          <h2>At heart, it predicts what comes next.</h2>
+          <p class="chapter-intro">A large language model repeatedly answers one question: given everything so far, what piece of text is most likely to come next?</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> Next-token predictor</div>
+          <div class="stage-hint">Click a prediction to continue the sentence</div>
+        </div>
+        <div class="stage-body big-idea">
+          <div>
+            <div class="prompt-box">
+              <span class="prompt-label">Text so far</span>
+              <div class="prompt-line"><span id="promptText">The sky is</span><span class="cursor"></span></div>
+            </div>
+            <div class="prediction-list" id="predictionList"></div>
+            <button class="btn secondary small" id="resetPredictor">Reset sentence</button>
+          </div>
+          <div>
+            <div class="formula">text so far <span class="arrow">→</span> probabilities <span class="arrow">→</span> next token</div>
+            <div style="height:26px"></div>
+            <div class="callout"><strong>The surprising part:</strong> doing this one small step extremely well, over and over, produces paragraphs, code, stories, and conversation.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="tokens">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">02</span>
+        <div>
+          <h2>First, words become tokens.</h2>
+          <p class="chapter-intro">Models do not see letters or words exactly as we do. Text is split into reusable chunks called tokens, then each token is replaced with an ID number.</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> Tokenizer lab</div>
+          <div class="stage-hint">Type anything</div>
+        </div>
+        <div class="stage-body tokenizer-layout">
+          <div>
+            <label class="prompt-label" for="tokenInput">Your text</label>
+            <textarea class="text-input" id="tokenInput">Language models learn patterns from enormous collections of text.</textarea>
+            <div class="tokens" id="tokenOutput"></div>
+            <div class="callout">Real tokenizers use a learned vocabulary. Common chunks like “ing” may get one token, while unusual words may split into several.</div>
+          </div>
+          <div>
+            <div class="stat-stack">
+              <div class="mini-stat"><span>Characters</span><strong id="charCount">0</strong></div>
+              <div class="mini-stat"><span>Approx. tokens</span><strong id="tokenCount">0</strong></div>
+              <div class="mini-stat"><span>Token IDs</span><strong style="font-size:14px;font-family:ui-monospace,monospace" id="tokenIds">—</strong></div>
+            </div>
+            <p class="map-caption">A token is not necessarily a whole word. Spaces and punctuation matter too.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="embeddings">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">03</span>
+        <div>
+          <h2>Numbers gain a sense of meaning.</h2>
+          <p class="chapter-intro">A token ID alone is arbitrary. An embedding turns it into a long list of numbers: a location in a many-dimensional “meaning space.” Similar ideas tend to land nearby.</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> Embedding map</div>
+          <div class="stage-hint">Choose a word and find its neighbors</div>
+        </div>
+        <div class="stage-body embedding-layout">
+          <div>
+            <span class="prompt-label">Explore words</span>
+            <div class="word-picker" id="wordPicker"></div>
+            <div class="callout" id="embeddingNote" style="margin-top:24px">Select a word to explore its neighborhood.</div>
+          </div>
+          <div>
+            <div class="map-wrap" id="embeddingMap">
+              <i class="axis-x"></i><i class="axis-y"></i>
+            </div>
+            <p class="map-caption">A real embedding can have thousands of dimensions. This 2D map is a simplified projection.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="attention">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">04</span>
+        <div>
+          <h2>Attention connects the clues.</h2>
+          <p class="chapter-intro">To understand each token, the model looks back at other tokens and decides which ones matter most right now. That dynamic lookup is called self-attention.</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> Attention viewer</div>
+          <div class="stage-hint">Click a word to see what it attends to</div>
+        </div>
+        <div class="stage-body">
+          <div class="attention-controls"><div class="sentence-tokens" id="attentionTokens"></div></div>
+          <div class="attention-viz">
+            <svg class="attn-svg" id="attentionSvg" viewBox="0 0 700 330" role="img" aria-label="Attention connections between words"></svg>
+            <div class="attn-explanation">
+              <div>
+                <span class="prompt-label">Selected token</span>
+                <h3 id="selectedToken">it</h3>
+                <p id="attentionText">The model links “it” strongly to “trophy” to resolve what the pronoun refers to.</p>
+              </div>
+              <div id="weightList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="transformer">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">05</span>
+        <div>
+          <h2>Then the transformer refines the message.</h2>
+          <p class="chapter-intro">Attention is part of a larger repeating block. Information flows through many transformer layers, becoming a richer representation at each pass.</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> Transformer stack</div>
+          <div class="stage-hint">Select a layer to inspect it</div>
+        </div>
+        <div class="stage-body">
+          <div class="machine">
+            <div class="machine-io"><strong>INPUT</strong><br><br>[The] [cat] [sat]</div>
+            <div>
+              <div class="layer-stack" id="layerStack">
+                <div class="layer active" data-detail="<strong>Embeddings</strong> turn token IDs and positions into vectors the network can work with."><span class="layer-name">Token + position</span><span class="layer-job">place meaning in sequence</span></div>
+                <div class="layer" data-detail="<strong>Self-attention</strong> lets every token gather relevant information from earlier tokens. Multiple attention heads can learn different relationships."><span class="layer-name">Multi-head attention</span><span class="layer-job">connect context</span></div>
+                <div class="layer" data-detail="<strong>Add & normalize</strong> preserves the incoming signal while keeping values numerically stable, which helps very deep networks train."><span class="layer-name">Add & normalize</span><span class="layer-job">stabilize signal</span></div>
+                <div class="layer" data-detail="<strong>The feed-forward network</strong> applies a learned transformation to each token independently, detecting and combining useful features."><span class="layer-name">Feed-forward network</span><span class="layer-job">transform features</span></div>
+                <div class="layer" data-detail="<strong>Repeat.</strong> A large model stacks this basic block many times. Early layers often capture syntax; later layers can represent more abstract relationships."><span class="layer-name">Repeat × many layers</span><span class="layer-job">build understanding</span></div>
+              </div>
+            </div>
+            <div class="machine-io"><strong>OUTPUT</strong><br><br>next-token scores</div>
+          </div>
+          <div class="layer-detail" id="layerDetail"><strong>Embeddings</strong> turn token IDs and positions into vectors the network can work with.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="training">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">06</span>
+        <div>
+          <h2>Training adjusts billions of tiny knobs.</h2>
+          <p class="chapter-intro">The model predicts hidden text, measures how wrong it was, and nudges its numerical weights to do slightly better next time. Repeat across vast amounts of text.</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> One training step</div>
+          <button class="btn secondary small" id="trainButton">Run training step</button>
+        </div>
+        <div class="stage-body training-layout">
+          <div class="training-canvas" id="trainingCanvas">
+            <span class="training-node tn-1">TEXT</span>
+            <span class="training-node tn-2">GUESS</span>
+            <span class="training-node tn-3">TRUTH</span>
+            <span class="training-node tn-4">UPDATE</span>
+            <i class="train-line tl-1"></i><i class="train-line tl-2"></i><i class="train-line tl-3"></i><i class="train-line tl-4"></i>
+            <div class="loss-display">loss: <span id="lossValue">2.84</span></div>
+          </div>
+          <div>
+            <div class="step-list" id="trainingSteps">
+              <div class="train-step active"><span><strong>Read examples.</strong><br>Feed in sequences from the training data.</span></div>
+              <div class="train-step"><span><strong>Make a prediction.</strong><br>Estimate the next token.</span></div>
+              <div class="train-step"><span><strong>Measure error.</strong><br>Compare the guess with the real token.</span></div>
+              <div class="train-step"><span><strong>Backpropagate.</strong><br>Find which weights contributed to the error.</span></div>
+              <div class="train-step"><span><strong>Update weights.</strong><br>Nudge them toward a better prediction.</span></div>
+            </div>
+            <div class="callout" style="margin-top:22px">The learned “knowledge” is distributed across numerical weights. It is not a database of copied sentences.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="sampling">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">07</span>
+        <div>
+          <h2>Temperature changes the personality of the answer.</h2>
+          <p class="chapter-intro">The model produces scores for possible next tokens. A sampling strategy turns those scores into a choice. Lower temperature is safer; higher temperature is more varied.</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> Sampling playground</div>
+          <button class="btn secondary small" id="sampleButton">Sample again</button>
+        </div>
+        <div class="stage-body sampling-layout">
+          <div>
+            <span class="prompt-label">Model output</span>
+            <div class="sample-output">The old lighthouse stood at the edge of the <span class="chosen-word" id="sampledWord">sea</span>.</div>
+            <p class="map-caption" id="temperatureNote">Focused: the most likely words dominate.</p>
+          </div>
+          <div class="slider-block">
+            <div class="slider-head"><strong>Temperature</strong><span class="slider-value" id="tempValue">0.7</span></div>
+            <input id="tempSlider" type="range" min="0.2" max="1.8" step="0.1" value="0.7" aria-label="Temperature">
+            <div class="slider-labels"><span>predictable</span><span>surprising</span></div>
+            <div class="distribution" id="distribution"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="limits">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">08</span>
+        <div>
+          <h2>Fluent does not always mean factual.</h2>
+          <p class="chapter-intro">An LLM learns patterns in language, not a guaranteed model of truth. Knowing its limits is as important as knowing its machinery.</p>
+        </div>
+      </div>
+      <div class="limits-grid">
+        <article class="limit-card reveal">
+          <div class="limit-icon">?</div>
+          <h3>Hallucination</h3>
+          <p>It can produce a plausible continuation that is confidently wrong. Important claims should be checked against reliable sources.</p>
+        </article>
+        <article class="limit-card reveal">
+          <div class="limit-icon">▣</div>
+          <h3>Finite context</h3>
+          <p>It only works with the text inside its current context window. Very long conversations may lose or compress older details.</p>
+        </article>
+        <article class="limit-card reveal">
+          <div class="limit-icon">≈</div>
+          <h3>Pattern, not intent</h3>
+          <p>It can imitate reasoning and emotion through language patterns, but that is not evidence of human-like experience or intention.</p>
+        </article>
+        <article class="limit-card reveal">
+          <div class="limit-icon">⚖</div>
+          <h3>Bias in, bias out</h3>
+          <p>Patterns and blind spots in training data can influence outputs. Safety training reduces this risk but cannot erase it entirely.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="chapter" id="whole-picture">
+      <div class="chapter-head reveal">
+        <span class="chapter-num">09</span>
+        <div>
+          <h2>Now see the whole machine.</h2>
+          <p class="chapter-intro">A prompt takes a precise journey. Click each stage for the final, connected explanation.</p>
+        </div>
+      </div>
+      <div class="stage reveal">
+        <div class="stage-bar">
+          <div class="stage-title"><i class="status-dot"></i> End-to-end pipeline</div>
+          <div class="stage-hint">Your prompt → the model → an answer</div>
+        </div>
+        <div class="stage-body">
+          <div class="pipeline" id="pipeline">
+            <div class="pipe-step active" data-pipe="<strong>Prompt:</strong> Your message enters the model as plain text, together with any system instructions and conversation history."><span class="pipe-num">01</span><h3>Prompt</h3><p>Text enters</p></div>
+            <span class="pipe-arrow">→</span>
+            <div class="pipe-step" data-pipe="<strong>Tokenize:</strong> The text is split into chunks and mapped to integer IDs from the model’s vocabulary."><span class="pipe-num">02</span><h3>Tokenize</h3><p>Text becomes IDs</p></div>
+            <span class="pipe-arrow">→</span>
+            <div class="pipe-step" data-pipe="<strong>Embed:</strong> Every token becomes a vector carrying learned meaning plus information about its position in the sequence."><span class="pipe-num">03</span><h3>Embed</h3><p>IDs gain meaning</p></div>
+            <span class="pipe-arrow">→</span>
+            <div class="pipe-step" data-pipe="<strong>Transform:</strong> Repeated attention and feed-forward layers mix context and refine each token’s representation."><span class="pipe-num">04</span><h3>Transform</h3><p>Context is mixed</p></div>
+            <span class="pipe-arrow">→</span>
+            <div class="pipe-step" data-pipe="<strong>Score:</strong> The final representation is converted into a probability-like score for every possible next token."><span class="pipe-num">05</span><h3>Score</h3><p>Options are ranked</p></div>
+            <span class="pipe-arrow">→</span>
+            <div class="pipe-step" data-pipe="<strong>Sample and repeat:</strong> One token is chosen, appended to the text, and the entire prediction loop runs again until the answer is complete."><span class="pipe-num">06</span><h3>Repeat</h3><p>One token at a time</p></div>
+          </div>
+          <div class="pipeline-detail" id="pipelineDetail"><strong>Prompt:</strong> Your message enters the model as plain text, together with any system instructions and conversation history.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="finale reveal">
+      <span class="eyebrow" style="color:var(--lime)">The one-sentence version</span>
+      <h2>An LLM is a giant pattern-learning machine that generates language one token at a time.</h2>
+      <p>It turns text into numbers, uses attention and learned weights to understand context, then repeatedly predicts what should come next.</p>
+      <a class="btn" href="#start">Explore again ↑</a>
+    </section>
+  </main>
+
+  <footer>
+    <span>Inside an LLM · Interactive visual explainer</span>
+    <span>No data is sent anywhere. Everything runs in your browser.</span>
+  </footer>
+
+  <script>
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+
+    // Reading progress and scroll reveals
+    const progressFill = $("#progressFill");
+    const progressLabel = $("#progressLabel");
+    const updateProgress = () => {
+      const max = document.documentElement.scrollHeight - innerHeight;
+      const progress = max > 0 ? Math.min(100, Math.round(scrollY / max * 100)) : 0;
+      progressFill.style.width = progress + "%";
+      progressLabel.textContent = progress + "%";
+    };
+    addEventListener("scroll", updateProgress, { passive: true });
+    updateProgress();
+
+    const revealObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) entry.target.classList.add("visible");
+      });
+    }, { threshold: .12 });
+    $$(".reveal").forEach(el => revealObserver.observe(el));
+
+    // Simple next-token predictor
+    const predictionSets = [
+      [
+        { word: "blue", pct: 64 },
+        { word: "clear", pct: 18 },
+        { word: "falling", pct: 7 },
+        { word: "not", pct: 4 }
+      ],
+      [
+        { word: "today", pct: 41 },
+        { word: "above", pct: 21 },
+        { word: "because", pct: 12 },
+        { word: "and", pct: 9 }
+      ],
+      [
+        { word: ".", pct: 55 },
+        { word: ",", pct: 18 },
+        { word: "but", pct: 11 },
+        { word: "!", pct: 5 }
+      ]
+    ];
+    let predictionStep = 0;
+    const promptText = $("#promptText");
+    const predictionList = $("#predictionList");
+
+    function renderPredictions() {
+      const set = predictionSets[Math.min(predictionStep, predictionSets.length - 1)];
+      predictionList.innerHTML = set.map(item => `
+        <button class="prediction" data-word="${item.word}">
+          <span class="prediction-word">${item.word}</span>
+          <span class="prob-bar"><i class="prob-fill" style="width:${item.pct}%"></i></span>
+          <span class="prediction-pct">${item.pct}%</span>
+        </button>`).join("");
+      $$(".prediction", predictionList).forEach(button => button.addEventListener("click", () => {
+        const word = button.dataset.word;
+        promptText.textContent += (/[.,!]/.test(word) ? "" : " ") + word;
+        predictionStep++;
+        if (predictionStep >= predictionSets.length) {
+          predictionList.innerHTML = `<div class="callout">A short sentence is complete. In a real response, the loop can run thousands of times.</div>`;
+        } else renderPredictions();
+      }));
+    }
+    $("#resetPredictor").addEventListener("click", () => {
+      predictionStep = 0;
+      promptText.textContent = "The sky is";
+      renderPredictions();
+    });
+    renderPredictions();
+
+    // Approximate tokenizer for teaching purposes
+    const tokenInput = $("#tokenInput");
+    const tokenOutput = $("#tokenOutput");
+    function simpleTokenize(text) {
+      const rough = text.match(/\s+|[A-Za-z]+(?:'[A-Za-z]+)?|\d+|[^\sA-Za-z\d]/g) || [];
+      const chunks = [];
+      rough.forEach(part => {
+        if (/^[A-Za-z]{9,}$/.test(part)) {
+          const splitAt = Math.max(3, Math.floor(part.length * .58));
+          chunks.push(part.slice(0, splitAt), part.slice(splitAt));
+        } else {
+          chunks.push(part);
+        }
+      });
+      return chunks;
+    }
+    function tokenId(token) {
+      let hash = 0;
+      for (let i = 0; i < token.length; i++) hash = ((hash << 5) - hash + token.charCodeAt(i)) | 0;
+      return Math.abs(hash) % 50000;
+    }
+    function renderTokens() {
+      const text = tokenInput.value;
+      const tokens = simpleTokenize(text);
+      tokenOutput.innerHTML = tokens.map(token => `<span class="token" title="Token ID ${tokenId(token)}">${token.replace(/ /g, "·").replace(/\n/g, "↵")}</span>`).join("");
+      $("#charCount").textContent = text.length;
+      $("#tokenCount").textContent = tokens.length;
+      const ids = tokens.slice(0, 5).map(tokenId).join(", ");
+      $("#tokenIds").textContent = ids + (tokens.length > 5 ? "…" : "");
+    }
+    tokenInput.addEventListener("input", renderTokens);
+    renderTokens();
+
+    // Embedding map
+    const words = [
+      { word: "king", x: 25, y: 25, group: "", note: "Close to queen, prince, and crown: words sharing royal context." },
+      { word: "queen", x: 32, y: 32, group: "", note: "Close to king and crown, but its vector also captures different associations." },
+      { word: "prince", x: 20, y: 38, group: "", note: "Related to royalty and family roles." },
+      { word: "crown", x: 37, y: 19, group: "", note: "An object strongly associated with royalty." },
+      { word: "apple", x: 69, y: 69, group: "food", note: "Near orange and banana because they appear in similar food-related contexts." },
+      { word: "orange", x: 78, y: 62, group: "food", note: "Its neighbors reflect fruit-related meanings." },
+      { word: "banana", x: 72, y: 80, group: "food", note: "Another fruit cluster member." },
+      { word: "computer", x: 73, y: 24, group: "tech", note: "Near software and keyboard: a technology cluster." },
+      { word: "software", x: 82, y: 32, group: "tech", note: "A concept closely related to computers." },
+      { word: "keyboard", x: 64, y: 15, group: "tech", note: "A physical object commonly discussed with computers." }
+    ];
+    const embeddingMap = $("#embeddingMap");
+    const wordPicker = $("#wordPicker");
+    words.forEach(item => {
+      const chip = document.createElement("button");
+      chip.className = "word-chip";
+      chip.textContent = item.word;
+      chip.dataset.word = item.word;
+      wordPicker.appendChild(chip);
+      const point = document.createElement("i");
+      point.className = `map-point ${item.group}`;
+      point.dataset.word = item.word;
+      point.style.left = item.x + "%";
+      point.style.top = item.y + "%";
+      embeddingMap.appendChild(point);
+    });
+    function selectWord(word) {
+      const item = words.find(entry => entry.word === word);
+      $$(".word-chip").forEach(el => el.classList.toggle("active", el.dataset.word === word));
+      $$(".map-point").forEach(el => el.classList.toggle("active", el.dataset.word === word));
+      $("#embeddingNote").innerHTML = `<strong>${item.word}</strong><br>${item.note}`;
+    }
+    $$(".word-chip, .map-point").forEach(el => el.addEventListener("click", () => selectWord(el.dataset.word)));
+    selectWord("king");
+
+    // Attention visualization
+    const sentence = ["The", "robot", "lifted", "the", "trophy", "because", "it", "was", "light"];
+    const attentionWeights = {
+      "The":     [1, .25, .08, .05, .03, .02, .02, .02, .02],
+      "robot":   [.2, 1, .7, .05, .25, .08, .05, .03, .02],
+      "lifted":  [.05, .76, 1, .06, .68, .1, .06, .04, .03],
+      "the":     [.12, .04, .08, 1, .6, .03, .02, .02, .02],
+      "trophy":  [.03, .2, .61, .3, 1, .15, .1, .12, .4],
+      "because": [.02, .1, .2, .02, .25, 1, .3, .2, .12],
+      "it":      [.03, .18, .22, .03, .93, .16, 1, .2, .35],
+      "was":     [.02, .08, .1, .02, .25, .15, .62, 1, .71],
+      "light":   [.02, .05, .1, .02, .68, .12, .35, .72, 1]
+    };
+    const attentionTokens = $("#attentionTokens");
+    sentence.forEach(word => {
+      const button = document.createElement("button");
+      button.className = "attn-token";
+      button.textContent = word;
+      button.dataset.word = word;
+      attentionTokens.appendChild(button);
+    });
+    function drawAttention(selectedIndex) {
+      const selected = sentence[selectedIndex];
+      const weights = attentionWeights[selected];
+      $$(".attn-token").forEach((el, index) => el.classList.toggle("active", index === selectedIndex));
+      $("#selectedToken").textContent = selected;
+      const explanations = {
+        it: "The model links “it” strongly to “trophy” to resolve what the pronoun refers to.",
+        light: "To interpret “light,” the model connects it to the trophy and to “was.” Context steers it toward weight, not illumination.",
+        lifted: "The verb gathers information about who acted and what was acted upon.",
+        robot: "The subject token connects strongly to its action: “lifted.”"
+      };
+      $("#attentionText").textContent = explanations[selected.toLowerCase()] || `This token gathers a mixture of information from the words that came before it.`;
+      const width = 700, baseY = 250, spacing = 650 / (sentence.length - 1);
+      let svg = "";
+      weights.forEach((weight, i) => {
+        if (i === selectedIndex || weight < .08) return;
+        const x1 = 25 + selectedIndex * spacing;
+        const x2 = 25 + i * spacing;
+        const controlY = baseY - 75 - Math.abs(x2 - x1) * .18;
+        svg += `<path d="M${x1},${baseY} Q${(x1+x2)/2},${controlY} ${x2},${baseY}" fill="none" stroke="#176b4d" stroke-width="${1 + weight * 9}" opacity="${.12 + weight * .7}" stroke-linecap="round"/>`;
+      });
+      sentence.forEach((word, i) => {
+        const x = 25 + i * spacing;
+        const active = i === selectedIndex;
+        svg += `<circle cx="${x}" cy="${baseY}" r="${active ? 18 : 12}" fill="${active ? "#17211b" : "#f7f3e9"}" stroke="#17211b" stroke-width="1.5"/>
+          <text x="${x}" y="${baseY + 38}" text-anchor="middle" font-size="12" font-weight="${active ? 800 : 600}" fill="#17211b">${word}</text>`;
+      });
+      svg += `<text x="350" y="48" text-anchor="middle" font-family="Georgia,serif" font-size="25" fill="#17211b">What matters to “${selected}”?</text>
+        <text x="350" y="74" text-anchor="middle" font-size="12" fill="#657168">Thicker lines mean stronger attention</text>`;
+      $("#attentionSvg").innerHTML = svg;
+      const ranked = sentence.map((word, i) => ({ word, weight: weights[i] })).sort((a,b) => b.weight - a.weight).slice(0, 4);
+      $("#weightList").innerHTML = ranked.map(item => `<div class="weight-row"><span>${item.word}</span><span class="weight-track"><i class="weight-fill" style="display:block;width:${item.weight*100}%"></i></span><span>${Math.round(item.weight*100)}</span></div>`).join("");
+    }
+    $$(".attn-token").forEach((button, index) => button.addEventListener("click", () => drawAttention(index)));
+    drawAttention(6);
+
+    // Transformer layer inspector
+    $$(".layer").forEach(layer => layer.addEventListener("click", () => {
+      $$(".layer").forEach(el => el.classList.remove("active"));
+      layer.classList.add("active");
+      $("#layerDetail").innerHTML = layer.dataset.detail;
+    }));
+
+    // Training animation
+    let trainingRunning = false;
+    $("#trainButton").addEventListener("click", () => {
+      if (trainingRunning) return;
+      trainingRunning = true;
+      const canvas = $("#trainingCanvas");
+      const steps = $$(".train-step");
+      const button = $("#trainButton");
+      button.textContent = "Training…";
+      canvas.classList.add("running");
+      let index = 0;
+      const losses = ["2.84", "2.84", "2.31", "1.76", "1.42"];
+      const timer = setInterval(() => {
+        steps.forEach((step, i) => step.classList.toggle("active", i === index));
+        $("#lossValue").textContent = losses[index];
+        index++;
+        if (index >= steps.length) {
+          clearInterval(timer);
+          setTimeout(() => {
+            canvas.classList.remove("running");
+            button.textContent = "Run again";
+            trainingRunning = false;
+          }, 700);
+        }
+      }, 700);
+    });
+
+    // Temperature and sampling
+    const candidates = [
+      { word: "sea", score: 3.3 },
+      { word: "world", score: 2.2 },
+      { word: "cliff", score: 1.8 },
+      { word: "storm", score: 1.4 },
+      { word: "unknown", score: .5 }
+    ];
+    function probabilities(temp) {
+      const exps = candidates.map(item => Math.exp(item.score / temp));
+      const total = exps.reduce((a,b) => a+b, 0);
+      return exps.map(value => value / total);
+    }
+    function updateTemperature() {
+      const temp = Number($("#tempSlider").value);
+      const probs = probabilities(temp);
+      $("#tempValue").textContent = temp.toFixed(1);
+      $("#temperatureNote").textContent = temp < .6 ? "Very focused: the top choice dominates." : temp > 1.2 ? "Exploratory: unusual words get a real chance." : "Balanced: likely words lead, with room for variety.";
+      $("#distribution").innerHTML = candidates.map((item, i) => `<div class="dist-col"><i class="dist-bar" style="height:${Math.max(3, probs[i]*150)}px"></i><span class="dist-word">${item.word}</span></div>`).join("");
+    }
+    function sampleWord() {
+      const probs = probabilities(Number($("#tempSlider").value));
+      let roll = Math.random();
+      let index = 0;
+      for (; index < probs.length; index++) {
+        roll -= probs[index];
+        if (roll <= 0) break;
+      }
+      const output = $("#sampledWord");
+      output.textContent = candidates[Math.min(index, candidates.length - 1)].word;
+      output.classList.remove("chosen-word");
+      void output.offsetWidth;
+      output.classList.add("chosen-word");
+    }
+    $("#tempSlider").addEventListener("input", updateTemperature);
+    $("#sampleButton").addEventListener("click", sampleWord);
+    updateTemperature();
+
+    // End-to-end pipeline
+    $$(".pipe-step").forEach(step => step.addEventListener("click", () => {
+      $$(".pipe-step").forEach(el => el.classList.remove("active"));
+      step.classList.add("active");
+      $("#pipelineDetail").innerHTML = step.dataset.pipe;
+    }));
+  </script>
+</body>
+</html>

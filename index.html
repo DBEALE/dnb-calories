@@ -1355,10 +1355,15 @@
                         <option value="drink">Drink</option>
                     </select>
                 </div>
-                <div style="position:relative;margin-bottom:12px;">
-                    <input type="text" id="fav-search" placeholder="Search favourites…" oninput="app.refreshFavouritesList()"
-                        style="width:100%;padding:9px 12px 9px 32px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-secondary);color:var(--text-primary);font-size:13px;">
-                    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);pointer-events:none;">🔍</span>
+                <div style="margin-bottom:12px;">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:6px;">Find favourite</div>
+                    <div style="position:relative;">
+                        <input type="search" id="fav-search" placeholder="Search by food, brand or serving…" oninput="app.refreshFavouritesList()"
+                            style="width:100%;padding:10px 38px 10px 34px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-secondary);color:var(--text-primary);font-size:14px;">
+                        <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);pointer-events:none;">🔍</span>
+                        <button onclick="app.clearFavouriteSearch()" title="Clear search"
+                            style="position:absolute;right:7px;top:50%;transform:translateY(-50%);width:26px;height:26px;border:none;border-radius:50%;background:var(--bg-tertiary);color:var(--text-secondary);cursor:pointer;font-size:14px;line-height:1;">×</button>
+                    </div>
                 </div>
                 <div id="favourites-list"></div>
             </div>
@@ -1649,7 +1654,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 54;
+        const APP_BUILD = 58;
 
         const TUTORIAL = [
             {
@@ -1786,6 +1791,33 @@
         ];
 
         const CHANGELOG = [
+            {
+                date: '2026-06-16',
+                title: 'Manual fallback entry fixed',
+                items: [
+                    'When AI cannot find or calculate a food, the Add Food fallback now shows full nutrition fields',
+                    'Manual fallback save now logs the entry correctly from the Add Food popup',
+                    'Fallback fields include brand, serving, protein, carbs, fat, fibre and salt',
+                ]
+            },
+            {
+                date: '2026-06-16',
+                title: 'Favourite search falls back to history',
+                items: [
+                    'When no favourite matches your search, the picker now shows matching previous food entries',
+                    'Previous entries can be added directly with the same quantity controls as favourites',
+                    'Duplicate historical matches are collapsed so the fallback list stays easier to scan',
+                ]
+            },
+            {
+                date: '2026-06-16',
+                title: 'Favourites search improved',
+                items: [
+                    'Made the Favourites search more visible when adding food from a saved favourite',
+                    'Search now matches food name, brand and serving description',
+                    'Added a clear button so you can quickly reset the favourites list',
+                ]
+            },
             {
                 date: '2026-06-14',
                 title: 'Add Food mobile scrolling fix',
@@ -4634,6 +4666,7 @@
                 document.getElementById('fav-date').value = today;
                 document.getElementById('fav-search').value = '';
                 this._favQty = {};
+                this._prevFoodQty = {};
                 // Pre-select meal type from latest entry for this date
                 this.getFoodEntries(today).then(entries => {
                     const mealSelect = document.getElementById('fav-meal-type');
@@ -4656,10 +4689,15 @@
                     if (query) {
                         favs = favs.filter(f =>
                             f.food_name?.toLowerCase().includes(query) ||
-                            f.brand?.toLowerCase().includes(query)
+                            f.brand?.toLowerCase().includes(query) ||
+                            f.serving_description?.toLowerCase().includes(query)
                         );
                     }
                     if (favs.length === 0) {
+                        if (query) {
+                            this.refreshPreviousFoodMatches(query);
+                            return;
+                        }
                         document.getElementById('favourites-list').innerHTML = query
                             ? `<p style="color:var(--text-secondary);font-size:12px;text-align:center;padding:24px 0;">No results for "<strong>${this.esc(query)}</strong>"</p>`
                             : '<p style="color: var(--text-secondary); font-size: 12px; text-align: center; padding: 24px 0;">No favourites yet.<br>Tick ⭐ Save as favourite when logging a meal.</p>';
@@ -4697,6 +4735,84 @@
                         </div>`;
                     }).join('');
                 };
+            },
+
+            refreshPreviousFoodMatches(query) {
+                const list = document.getElementById('favourites-list');
+                list.innerHTML = `<p style="color:var(--text-secondary);font-size:12px;text-align:center;padding:18px 0;">No saved favourites matched "<strong>${this.esc(query)}</strong>". Searching previous food entries...</p>`;
+                const req = db.transaction(['foodEntries'], 'readonly').objectStore('foodEntries').getAll();
+                req.onsuccess = () => {
+                    const seen = new Set();
+                    const matches = req.result
+                        .filter(e => !e.deleted)
+                        .filter(e =>
+                            e.food_name?.toLowerCase().includes(query) ||
+                            e.brand?.toLowerCase().includes(query) ||
+                            e.serving_description?.toLowerCase().includes(query)
+                        )
+                        .sort((a, b) => `${b.date || ''} ${b.time || ''}`.localeCompare(`${a.date || ''} ${a.time || ''}`))
+                        .filter(e => {
+                            const key = [
+                                (e.food_name || '').toLowerCase(),
+                                (e.brand || '').toLowerCase(),
+                                (e.serving_description || '').toLowerCase(),
+                                e.calories || 0,
+                                e.protein_g || 0,
+                                e.carbs_g || 0,
+                                e.fat_g || 0,
+                                e.fibre_g || 0,
+                                e.salt_g || 0,
+                            ].join('|');
+                            if (seen.has(key)) return false;
+                            seen.add(key);
+                            return true;
+                        })
+                        .slice(0, 20);
+
+                    if (matches.length === 0) {
+                        list.innerHTML = `<p style="color:var(--text-secondary);font-size:12px;text-align:center;padding:24px 0;">No favourites or previous food entries matched "<strong>${this.esc(query)}</strong>".</p>`;
+                        return;
+                    }
+
+                    const btnStyle = 'border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;padding:5px 8px;line-height:1;';
+                    list.innerHTML = `
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin:4px 0 8px;">Previous food entries</div>
+                        ${matches.map(entry => {
+                            const id = entry.id;
+                            const qty = (this._prevFoodQty || {})[id] || 1;
+                            const qtyLabel = qty % 1 === 0 ? `x${qty}` : `x${qty.toFixed(1)}`;
+                            const scaledCal = Math.round((entry.calories || 0) * qty);
+                            const macros = [
+                                entry.protein_g ? `P ${Math.round(entry.protein_g * qty)}g` : '',
+                                entry.carbs_g   ? `C ${Math.round(entry.carbs_g   * qty)}g` : '',
+                                entry.fat_g     ? `F ${Math.round(entry.fat_g     * qty)}g` : '',
+                                entry.fibre_g   ? `Fi ${Math.round(entry.fibre_g  * qty)}g` : '',
+                            ].filter(Boolean).join(' · ');
+                            return `
+                            <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border-color);"
+                                 data-prev-calories="${entry.calories||0}" data-prev-protein="${entry.protein_g||0}" data-prev-carbs="${entry.carbs_g||0}" data-prev-fat="${entry.fat_g||0}" data-prev-fibre="${entry.fibre_g||0}">
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${this.esc(entry.food_name)}</div>
+                                    <div id="prev-info-${id}" style="font-size:11px;color:var(--text-secondary);margin-top:2px;"><strong>${scaledCal} kcal</strong>${macros ? ' &nbsp;·&nbsp; ' + macros : ''}</div>
+                                    <div style="font-size:11px;color:var(--text-tertiary);">${this.esc([entry.brand, entry.serving_description, entry.date].filter(Boolean).join(' · '))}</div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                                    <button onclick="app.adjustPreviousFoodQty(${id},-0.5)" style="${btnStyle}background:var(--bg-secondary);color:var(--text-primary);">‹</button>
+                                    <span id="prev-qty-${id}" style="font-size:12px;font-weight:700;color:var(--text-secondary);min-width:28px;text-align:center;">${qtyLabel}</span>
+                                    <button onclick="app.adjustPreviousFoodQty(${id},0.5)"  style="${btnStyle}background:var(--bg-secondary);color:var(--text-primary);">›</button>
+                                    <button onclick="app.logPreviousFood(${id})" style="${btnStyle}background:var(--accent-success);color:white;font-size:18px;padding:4px 10px;">+</button>
+                                </div>
+                            </div>`;
+                        }).join('')}`;
+                };
+            },
+
+            clearFavouriteSearch() {
+                const search = document.getElementById('fav-search');
+                if (!search) return;
+                search.value = '';
+                this.refreshFavouritesList();
+                search.focus();
             },
 
             adjustFavQty(id, delta) {
@@ -4749,6 +4865,71 @@
                         fibre_g:   mul(fav.fibre_g),
                         salt_g:    mul(fav.salt_g),
                         source_type: 'favourite',
+                        sync_id: crypto.randomUUID(),
+                        updated_at: new Date().toISOString(),
+                        created_at: new Date().toISOString(),
+                    };
+                    const tx = db.transaction(['foodEntries'], 'readwrite');
+                    tx.objectStore('foodEntries').add(entry);
+                    tx.oncomplete = () => {
+                        this.lastMealType = entry.meal_type;
+                        this.lastMealDate = entry.date;
+                        this.closeModal('favourites');
+                        this.refreshAll();
+                    };
+                };
+            },
+
+            adjustPreviousFoodQty(id, delta) {
+                if (!this._prevFoodQty) this._prevFoodQty = {};
+                const current = this._prevFoodQty[id] || 1;
+                const next = Math.max(0.5, Math.round((current + delta) * 2) / 2);
+                this._prevFoodQty[id] = next;
+
+                const qtyEl = document.getElementById(`prev-qty-${id}`);
+                if (qtyEl) qtyEl.textContent = next % 1 === 0 ? `x${next}` : `x${next.toFixed(1)}`;
+
+                const infoEl = document.getElementById(`prev-info-${id}`);
+                if (infoEl) {
+                    const row = infoEl.closest('[data-prev-calories]');
+                    if (row) {
+                        const cal     = parseFloat(row.dataset.prevCalories) || 0;
+                        const protein = parseFloat(row.dataset.prevProtein)  || 0;
+                        const carbs   = parseFloat(row.dataset.prevCarbs)    || 0;
+                        const fat     = parseFloat(row.dataset.prevFat)      || 0;
+                        const fibre   = parseFloat(row.dataset.prevFibre)    || 0;
+                        const parts = [
+                            protein ? `P ${Math.round(protein * next)}g` : '',
+                            carbs   ? `C ${Math.round(carbs   * next)}g` : '',
+                            fat     ? `F ${Math.round(fat     * next)}g` : '',
+                            fibre   ? `Fi ${Math.round(fibre  * next)}g` : '',
+                        ].filter(Boolean).join(' · ');
+                        infoEl.innerHTML = `<strong>${Math.round(cal * next)} kcal</strong>${parts ? ' &nbsp;·&nbsp; ' + parts : ''}`;
+                    }
+                }
+            },
+
+            logPreviousFood(id) {
+                const qty = (this._prevFoodQty || {})[id] || 1;
+                const req = db.transaction(['foodEntries'], 'readonly').objectStore('foodEntries').get(id);
+                req.onsuccess = () => {
+                    const source = req.result;
+                    if (!source) return;
+                    const mul = v => v != null ? Math.round(v * qty * 10) / 10 : null;
+                    const entry = {
+                        date: document.getElementById('fav-date').value,
+                        time: new Date().toTimeString().slice(0, 5),
+                        meal_type: document.getElementById('fav-meal-type').value,
+                        food_name: source.food_name + (qty !== 1 ? ` (x${qty % 1 === 0 ? qty : qty.toFixed(1)})` : ''),
+                        brand: source.brand || null,
+                        serving_description: source.serving_description || null,
+                        calories: Math.round((source.calories || 0) * qty),
+                        protein_g: mul(source.protein_g),
+                        carbs_g:   mul(source.carbs_g),
+                        fat_g:     mul(source.fat_g),
+                        fibre_g:   mul(source.fibre_g),
+                        salt_g:    mul(source.salt_g),
+                        source_type: 'previous',
                         sync_id: crypto.randomUUID(),
                         updated_at: new Date().toISOString(),
                         created_at: new Date().toISOString(),
@@ -5085,9 +5266,16 @@
                             </div>`;
                         } else {
                             resultDiv.innerHTML = '<p style="color:var(--accent-danger);font-size:12px;">⚠️ Could not calculate nutrition. Please adjust manually.</p>' +
-                                '<div class="form-group"><label>Food Name</label><input type="text" id="manual-name" placeholder="e.g., Chicken sandwich"></div>' +
-                                '<div class="form-group"><label>Calories</label><input type="number" id="manual-calories" placeholder="e.g., 450"></div>' +
-                                '<button class="btn btn-primary" onclick="app.saveManualEntry()">Save Entry</button>';
+                                `<div class="upload-form-row"><label>Food</label><input type="text" id="manual-name" value="${this.esc(description)}" placeholder="e.g. Chicken sandwich"></div>` +
+                                '<div class="upload-form-row"><label>Brand</label><input type="text" id="manual-brand" placeholder="optional"></div>' +
+                                '<div class="upload-form-row"><label>Serving</label><input type="text" id="manual-serving" placeholder="optional"></div>' +
+                                '<div class="upload-form-row"><label>Calories</label><input type="number" id="manual-calories" placeholder="kcal"></div>' +
+                                '<div class="upload-form-row"><label>Protein</label><input type="number" id="manual-protein" step="0.1" placeholder="g (optional)"></div>' +
+                                '<div class="upload-form-row"><label>Carbs</label><input type="number" id="manual-carbs" step="0.1" placeholder="g (optional)"></div>' +
+                                '<div class="upload-form-row"><label>Fat</label><input type="number" id="manual-fat" step="0.1" placeholder="g (optional)"></div>' +
+                                '<div class="upload-form-row"><label>Fibre</label><input type="number" id="manual-fibre" step="0.1" placeholder="g (optional)"></div>' +
+                                '<div class="upload-form-row"><label>Salt</label><input type="number" id="manual-salt" step="0.01" placeholder="g (optional)"></div>' +
+                                '<button class="btn btn-primary" onclick="app.saveManualEntry()" style="width:100%;">Save Entry</button>';
                         }
                     }
                 };
@@ -5304,12 +5492,29 @@
             },
 
             saveManualEntry() {
+                const name = (document.getElementById('manual-name')?.value || '').trim();
+                const calories = parseInt(document.getElementById('manual-calories')?.value, 10);
+                if (!name) {
+                    alert('Please enter a food name.');
+                    return Promise.resolve();
+                }
+                if (!Number.isFinite(calories) || calories < 0) {
+                    alert('Please enter calories.');
+                    return Promise.resolve();
+                }
                 const entry = {
-                    date: this.currentReviewData.date,
+                    date: document.getElementById('upload-date')?.value || this.selectedTodayDate || this.getCurrentDateString(),
                     time: new Date().toTimeString().slice(0, 5),
-                    meal_type: this.currentReviewData.meal_type,
-                    food_name: document.getElementById('manual-name').value,
-                    calories: parseInt(document.getElementById('manual-calories').value) || 0,
+                    meal_type: document.getElementById('upload-meal-type')?.value || 'breakfast',
+                    food_name: name,
+                    brand: document.getElementById('manual-brand')?.value || null,
+                    serving_description: document.getElementById('manual-serving')?.value || null,
+                    calories,
+                    protein_g: parseFloat(document.getElementById('manual-protein')?.value) || null,
+                    carbs_g: parseFloat(document.getElementById('manual-carbs')?.value) || null,
+                    fat_g: parseFloat(document.getElementById('manual-fat')?.value) || null,
+                    fibre_g: parseFloat(document.getElementById('manual-fibre')?.value) || null,
+                    salt_g: parseFloat(document.getElementById('manual-salt')?.value) || null,
                     source_type: 'manual',
                     created_at: new Date().toISOString(),
                     sync_id: crypto.randomUUID(),
@@ -5324,7 +5529,7 @@
                     transaction.oncomplete = () => {
                         this.lastMealType = entry.meal_type;
                         this.lastMealDate = entry.date;
-                        this.closeModal('review');
+                        this.closeModal('upload');
                         this.refreshAll();
                         resolve();
                     };

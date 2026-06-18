@@ -1654,7 +1654,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 58;
+        const APP_BUILD = 61;
 
         const TUTORIAL = [
             {
@@ -1791,6 +1791,25 @@
         ];
 
         const CHANGELOG = [
+            {
+                date: '2026-06-18',
+                title: 'Startup guard fix',
+                items: [
+                    'Prevented app startup from stopping if the optional About version label is not present',
+                    'This keeps the Log dashboard rendering reliably after layout changes',
+                ]
+            },
+            {
+                date: '2026-06-18',
+                title: 'Phase 1 weight-loss dashboard',
+                items: [
+                    'Added weekly trend judgement using 7-day average calories and 7-day average weight',
+                    'Compares this week\'s average weight against last week and explains flat, losing or gaining trends',
+                    'Flags when logged calories suggest a deficit but real-world weight trend is flat',
+                    'Shows protein eaten vs target with grams remaining and practical next-meal guidance',
+                    'Adds High / Medium / Low tracking confidence and one clear next best action',
+                ]
+            },
             {
                 date: '2026-06-16',
                 title: 'Manual fallback entry fixed',
@@ -2396,7 +2415,8 @@
                 await initDB();
                 this.initDarkMode();
                 document.getElementById('app-version-display').textContent = 'b' + APP_BUILD;
-                document.getElementById('about-version').textContent = 'Build ' + APP_BUILD;
+                const aboutVersion = document.getElementById('about-version');
+                if (aboutVersion) aboutVersion.textContent = 'Build ' + APP_BUILD;
                 this.loadProfile();
                 this.selectedTodayDate = this.getCurrentDateString();
                 this.updateDate();
@@ -2914,6 +2934,8 @@
                 const remaining = target - consumed;
                 const maintenance = this.profile?.maintenance_kcal || 2500;
                 const deficit = maintenance - consumed;
+                const phase1 = await this.buildPhase1Dashboard(selectedDate, entries, { consumed, protein, carbs, fat, fiber, salt });
+                this.weightChange7d = phase1.weightChange;
 
                 // Weight summary for top panel
                 let weightSummary = { valueText: '—', detailText: 'No weight logged' };
@@ -2936,7 +2958,7 @@
                 }
 
                 // Calorie + macro rings
-                this.renderCalorieRing({ consumed, target, maintenance, deficit, protein, carbs, fat, fiber, salt, weightSummary });
+                this.renderCalorieRing({ consumed, target, maintenance, deficit, protein, carbs, fat, fiber, salt, weightSummary, phase1 });
 
 
                 // Meals
@@ -3019,7 +3041,152 @@
                 }
             },
 
-            renderCalorieRing({ consumed, target, maintenance, deficit, protein, carbs, fat, fiber, salt, weightSummary }) {
+            dateAddString(dateString, days) {
+                const [y, m, d] = dateString.split('-').map(Number);
+                const date = new Date(y, m - 1, d + days);
+                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            },
+
+            dateRangeStrings(endDate, days) {
+                return Array.from({ length: days }, (_, i) => this.dateAddString(endDate, i - days + 1));
+            },
+
+            average(nums) {
+                const valid = nums.filter(n => Number.isFinite(n));
+                return valid.length ? valid.reduce((s, n) => s + n, 0) / valid.length : null;
+            },
+
+            latestWeightPerDay(weights) {
+                const byDate = {};
+                weights.forEach(w => {
+                    const existing = byDate[w.date];
+                    if (!existing || (w.time || '').localeCompare(existing.time || '') >= 0) byDate[w.date] = w;
+                });
+                return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+            },
+
+            async buildPhase1Dashboard(selectedDate, todayEntries, todayTotals) {
+                const rda = this.calculateRDA();
+                const target = this.profile?.target_kcal || 2000;
+                const maintenance = this.profile?.maintenance_kcal || 2500;
+                const thisDates = this.dateRangeStrings(selectedDate, 7);
+                const prevDates = this.dateRangeStrings(this.dateAddString(selectedDate, -7), 7);
+                const allFoods = await this.getAllFoodEntries();
+                const foodsThisWeek = allFoods.filter(e => thisDates.includes(e.date));
+                const foodsPrevWeek = allFoods.filter(e => prevDates.includes(e.date));
+                const dayTotals = (dates, entries) => dates.map(date => ({
+                    date,
+                    entries: entries.filter(e => e.date === date),
+                })).filter(d => d.entries.length > 0).map(d => ({
+                    ...d,
+                    calories: d.entries.reduce((s, e) => s + (e.calories || 0), 0),
+                }));
+                const loggedDays = dayTotals(thisDates, foodsThisWeek);
+                const prevLoggedDays = dayTotals(prevDates, foodsPrevWeek);
+                const avgCalories7 = this.average(loggedDays.map(d => d.calories));
+                const avgCaloriesPrev7 = this.average(prevLoggedDays.map(d => d.calories));
+
+                const startThis = thisDates[0], startPrev = prevDates[0];
+                const weightsThisRaw = await this.getWeightEntries(startThis, selectedDate);
+                const weightsPrevRaw = await this.getWeightEntries(startPrev, this.dateAddString(startThis, -1));
+                const weightsThis = this.latestWeightPerDay(weightsThisRaw);
+                const weightsPrev = this.latestWeightPerDay(weightsPrevRaw);
+                const avgWeight7 = this.average(weightsThis.map(w => Number(w.weight_kg)));
+                const avgWeightPrev7 = this.average(weightsPrev.map(w => Number(w.weight_kg)));
+                const weightChange = avgWeight7 != null && avgWeightPrev7 != null ? avgWeight7 - avgWeightPrev7 : null;
+                let weightTrend = 'not enough data';
+                if (weightsThis.length >= 3 && weightChange != null) {
+                    weightTrend = weightChange <= -0.25 ? 'losing' : weightChange >= 0.25 ? 'gaining' : 'flat';
+                }
+
+                const estimatedEntries = foodsThisWeek.filter(e =>
+                    e.source_type === 'image' ||
+                    e.source_type === 'manual' ||
+                    (e.ocr_confidence != null && e.ocr_confidence < 0.75)
+                );
+                const missingMacroEntries = foodsThisWeek.filter(e => !(e.protein_g || e.carbs_g || e.fat_g));
+                const alcoholEntries = foodsThisWeek.filter(e => /beer|wine|lager|cider|vodka|gin|whisky|rum|cocktail|alcohol|pint/i.test(`${e.food_name || ''} ${e.brand || ''} ${e.serving_description || ''}`));
+                const weekendDates = thisDates.filter(d => {
+                    const [y, m, day] = d.split('-').map(Number);
+                    const dow = new Date(y, m - 1, day).getDay();
+                    return dow === 0 || dow === 6;
+                });
+                const loggedWeekendDates = new Set(loggedDays.map(d => d.date));
+                const weekendDaysLogged = weekendDates.filter(d => loggedWeekendDates.has(d)).length;
+                let confidenceScore = 100;
+                if (loggedDays.length < 6) confidenceScore -= 25;
+                if (weekendDates.length && weekendDaysLogged < weekendDates.length) confidenceScore -= 20;
+                if (foodsThisWeek.length && estimatedEntries.length / foodsThisWeek.length > 0.4) confidenceScore -= 20;
+                if (foodsThisWeek.length && missingMacroEntries.length / foodsThisWeek.length > 0.4) confidenceScore -= 10;
+                if (weightsThis.length < 3) confidenceScore -= 15;
+                if (alcoholEntries.some(e => e.source_type === 'manual' || !e.serving_description)) confidenceScore -= 15;
+                const confidence = confidenceScore >= 75 ? 'High' : confidenceScore >= 50 ? 'Medium' : 'Low';
+
+                const proteinTarget = rda?.protein || 0;
+                const proteinRemaining = Math.max(0, proteinTarget - todayTotals.protein);
+                const loggedDeficit = avgCalories7 != null ? maintenance - avgCalories7 : null;
+                const deficitMismatch = loggedDeficit != null && loggedDeficit >= 250 && weightTrend === 'flat';
+
+                let nextAction;
+                if (confidence === 'Low') {
+                    nextAction = 'Improve tracking accuracy for 7 days before changing calories. Weigh regularly and track oils, sauces, snacks and weekend alcohol carefully.';
+                } else if (deficitMismatch) {
+                    nextAction = 'Keep calories similar for now, but check weekend intake, alcohol, portion estimates, oils, sauces and snacks.';
+                } else if (proteinRemaining >= 40) {
+                    nextAction = `Make your next meal protein-led and aim for 35-45g protein. You still need ${Math.round(proteinRemaining)}g today.`;
+                } else if (todayTotals.consumed > target && todayTotals.consumed < maintenance) {
+                    nextAction = 'You are above target but still below estimated maintenance. Do not over-restrict tonight; return to target tomorrow.';
+                } else if (weightTrend === 'losing') {
+                    nextAction = 'Your weekly weight trend is moving down. Keep this calorie target for another week.';
+                } else {
+                    nextAction = 'Keep logging consistently until the weekly trend is clearer.';
+                }
+
+                const progressMessage = deficitMismatch
+                    ? 'Your logged calories suggest a deficit, but your weight trend is flat. Check weekend intake, alcohol, portion estimates, oils, sauces and snacks.'
+                    : weightTrend === 'losing'
+                        ? 'Your calorie intake and weight trend are aligned. Keep the current approach for another week before changing the target.'
+                        : todayTotals.consumed > target && todayTotals.consumed < maintenance
+                            ? 'You are above target but still below estimated maintenance. Do not over-restrict tonight.'
+                            : 'Fat loss is judged by your weekly weight trend, not one day. Daily weight moves with water, salt, exercise and food volume.';
+
+                const proteinMessage = proteinRemaining <= 0
+                    ? `Protein target reached: ${Math.round(todayTotals.protein)}g of ${Math.round(proteinTarget)}g.`
+                    : proteinRemaining >= 40
+                        ? `Protein is behind today: ${Math.round(todayTotals.protein)}g of ${Math.round(proteinTarget)}g - ${Math.round(proteinRemaining)}g remaining. Aim for 35-45g in your next meal.`
+                        : proteinRemaining >= 20
+                            ? `${Math.round(todayTotals.protein)}g of ${Math.round(proteinTarget)}g protein - ${Math.round(proteinRemaining)}g remaining. Add a protein-rich snack or make the next meal protein-led.`
+                            : `${Math.round(todayTotals.protein)}g of ${Math.round(proteinTarget)}g protein - ${Math.round(proteinRemaining)}g remaining. A small protein snack would finish the day well.`;
+
+                const confidenceReasons = [];
+                if (loggedDays.length < 6) confidenceReasons.push(`${loggedDays.length}/7 days logged`);
+                if (weekendDates.length && weekendDaysLogged < weekendDates.length) confidenceReasons.push('weekend logging incomplete');
+                if (foodsThisWeek.length && estimatedEntries.length / foodsThisWeek.length > 0.4) confidenceReasons.push('many meals estimated');
+                if (weightsThis.length < 3) confidenceReasons.push(`${weightsThis.length} weight entries`);
+                if (missingMacroEntries.length / Math.max(foodsThisWeek.length, 1) > 0.4) confidenceReasons.push('many entries missing macros');
+                if (alcoholEntries.some(e => e.source_type === 'manual' || !e.serving_description)) confidenceReasons.push('alcohol detail may be incomplete');
+
+                return {
+                    avgCalories7,
+                    avgCaloriesPrev7,
+                    avgWeight7,
+                    avgWeightPrev7,
+                    weightChange,
+                    weightTrend,
+                    loggedDays: loggedDays.length,
+                    weightsThis: weightsThis.length,
+                    loggedDeficit,
+                    progressMessage,
+                    proteinMessage,
+                    proteinRemaining,
+                    confidence,
+                    confidenceReasons,
+                    nextAction,
+                    deficitMismatch,
+                };
+            },
+
+            renderCalorieRing({ consumed, target, maintenance, deficit, protein, carbs, fat, fiber, salt, weightSummary, phase1 }) {
                 const rda = this.calculateRDA();
 
                 // ── 1. Large centred calorie ring ──────────────────────
@@ -3216,8 +3383,46 @@
                         </div>
                     </div>` : '';
 
+                const fmtKcal = v => v == null ? 'No data' : `${Math.round(v).toLocaleString()} kcal/day`;
+                const fmtKg = v => v == null ? 'No data' : `${v.toFixed(1)} kg`;
+                const trendColor = phase1?.weightTrend === 'losing' ? '#10b981'
+                    : phase1?.weightTrend === 'gaining' ? '#ef4444'
+                    : phase1?.weightTrend === 'flat' ? '#f59e0b'
+                    : 'var(--text-tertiary)';
+                const confidenceColor = phase1?.confidence === 'High' ? '#10b981' : phase1?.confidence === 'Medium' ? '#f59e0b' : '#ef4444';
+                const changeText = phase1?.weightChange == null
+                    ? 'Need more weigh-ins'
+                    : `${phase1.weightChange >= 0 ? '+' : ''}${phase1.weightChange.toFixed(1)} kg vs last week`;
+                const confidenceDetail = phase1?.confidenceReasons?.length
+                    ? phase1.confidenceReasons.join(', ')
+                    : 'Your calorie trend is likely reliable.';
+                const phase1Section = phase1 ? `
+                    <div style="border-top:1px solid var(--border-color);margin-top:14px;padding-top:14px;">
+                        <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;padding:12px;margin-bottom:12px;">
+                            <div style="font-size:10px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:5px;">Next best action</div>
+                            <div style="font-size:13px;font-weight:700;color:var(--text-primary);line-height:1.45;">${this.esc(phase1.nextAction)}</div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                            <div style="background:var(--bg-secondary);border-radius:10px;padding:10px;">
+                                <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;">7-day calories</div>
+                                <div style="font-size:16px;font-weight:800;color:var(--text-primary);">${fmtKcal(phase1.avgCalories7)}</div>
+                                <div style="font-size:10px;color:var(--text-secondary);">${phase1.loggedDays}/7 days logged</div>
+                            </div>
+                            <div style="background:var(--bg-secondary);border-radius:10px;padding:10px;">
+                                <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;">7-day weight</div>
+                                <div style="font-size:16px;font-weight:800;color:var(--text-primary);">${fmtKg(phase1.avgWeight7)}</div>
+                                <div style="font-size:10px;color:${trendColor};font-weight:700;">${this.esc(phase1.weightTrend)} · ${this.esc(changeText)}</div>
+                            </div>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.55;margin-bottom:8px;">${this.esc(phase1.progressMessage)}</div>
+                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.55;margin-bottom:8px;">${this.esc(phase1.proteinMessage)}</div>
+                        <div style="font-size:12px;line-height:1.55;padding:9px 10px;border-radius:10px;background:${confidenceColor}14;border:1px solid ${confidenceColor}35;color:var(--text-secondary);">
+                            <strong style="color:${confidenceColor};">Tracking confidence: ${phase1.confidence}</strong> - ${this.esc(confidenceDetail)}${phase1.confidence === 'Low' ? ' Low confidence means the apparent deficit may not be real yet.' : ''}
+                        </div>
+                    </div>` : '';
+
                 document.getElementById('calorie-ring-container').innerHTML =
-                    calRing + macroSection + rdaSection;
+                    calRing + phase1Section + macroSection + rdaSection;
 
                 // Animate calorie ring after paint
                 requestAnimationFrame(() => requestAnimationFrame(() => {

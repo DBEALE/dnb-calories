@@ -1654,7 +1654,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 63;
+        const APP_BUILD = 65;
 
         const TUTORIAL = [
             {
@@ -1791,6 +1791,17 @@
         ];
 
         const CHANGELOG = [
+            {
+                date: '2026-06-18',
+                title: 'Phase 3 controlled experiments',
+                items: [
+                    'Added 14-day adjustment guidance so calorie changes are tested instead of guessed',
+                    'Added adherence checks for target days, protein consistency and weigh-ins',
+                    'Added safe target review rules before recommending calorie reductions',
+                    'Added a guarded Start 14-day experiment action that updates the calorie target after confirmation',
+                    'Added a heart-health nutrition nudge focused on fibre, saturated fat visibility and healthier fat choices',
+                ]
+            },
             {
                 date: '2026-06-18',
                 title: 'Phase 2 multi-week coaching',
@@ -2707,6 +2718,27 @@
                 });
             },
 
+            async startPhase3Experiment(targetKcal, reviewDate) {
+                if (!this.profile) return;
+                const target = Math.round(Number(targetKcal));
+                const review = String(reviewDate || '').replace(/[^0-9-]/g, '');
+                const minSafe = this.profile.sex === 'male' ? 1500 : 1200;
+                if (!Number.isFinite(target) || target <= 0) return;
+                if (target < minSafe) {
+                    alert(`Target not changed. The minimum guardrail is ${minSafe.toLocaleString()} kcal/day.`);
+                    return;
+                }
+                if (!confirm(`Start a 14-day experiment at ${target.toLocaleString()} kcal/day?\n\nReview date: ${review || 'in 14 days'}\n\nThis will update your daily calorie target.`)) return;
+                await this.saveProfile({
+                    ...this.profile,
+                    target_kcal: target,
+                    active_experiment_target_kcal: target,
+                    active_experiment_started: this.getCurrentDateString(),
+                    active_experiment_review: review || this.dateAddString(this.getCurrentDateString(), 14),
+                });
+                alert(`Experiment started. Target set to ${target.toLocaleString()} kcal/day until ${review || this.dateAddString(this.getCurrentDateString(), 14)}.`);
+            },
+
             populateSettings() {
                 if (!this.profile) return;
                 document.getElementById('settings-sex').value = this.profile.sex;
@@ -3222,6 +3254,85 @@
                     confidenceBreakdown,
                 };
 
+                const last14Dates = this.dateRangeStrings(selectedDate, 14);
+                const foods14 = allFoods.filter(e => last14Dates.includes(e.date));
+                const logged14 = dayTotals(last14Dates, foods14);
+                const weights14 = this.latestWeightPerDay(await this.getWeightEntries(last14Dates[0], selectedDate));
+                const dailyProtein14 = logged14.map(d => ({
+                    ...d,
+                    protein: d.entries.reduce((s, e) => s + (e.protein_g || 0), 0),
+                }));
+                const adherenceDays = logged14.filter(d => d.calories <= target + 100 && d.calories >= Math.max(0, target - 300)).length;
+                const proteinHitDays = dailyProtein14.filter(d => proteinTarget > 0 && d.protein >= proteinTarget * 0.8).length;
+                const adherencePct = logged14.length ? Math.round(adherenceDays / logged14.length * 100) : 0;
+                const proteinHitPct = logged14.length ? Math.round(proteinHitDays / logged14.length * 100) : 0;
+                const currentWeight = lastWeight21 ? Number(lastWeight21.weight_kg) : (this.profile?.current_weight_kg || 0);
+                const weeklyLossRate = weightChange21 != null && daysBetweenWeights > 0 ? weightChange21 / daysBetweenWeights * 7 : null;
+                const losingTooFast = weeklyLossRate != null && currentWeight > 0 && weeklyLossRate < -(currentWeight * 0.01);
+                const minSafeCalories = this.profile?.sex === 'male' ? 1500 : 1200;
+                const canAdjustCalories = confidence !== 'Low' && logged21.length >= 14 && weights21.length >= 6 && proteinHitPct >= 50 && !losingTooFast;
+                let experimentTitle = 'Improve tracking before changing target';
+                let experimentDetail = 'Run 14 days with complete food logging, at least 6 weigh-ins, and accurate weekend alcohol/snacks before changing calories.';
+                let suggestedTarget = null;
+                if (losingTooFast) {
+                    experimentTitle = 'Ease up for 14 days';
+                    experimentDetail = 'Weight is dropping faster than about 1% body weight per week. Consider increasing calories by 100-150 kcal/day or holding steady until the trend slows.';
+                    suggestedTarget = target + 100;
+                } else if (canAdjustCalories && (plateau || (estimatedMaintenanceReal && estimatedMaintenanceReal < maintenance - 150))) {
+                    suggestedTarget = Math.max(minSafeCalories, target - 150);
+                    experimentTitle = `14-day target experiment: ${suggestedTarget.toLocaleString()} kcal/day`;
+                    experimentDetail = `Reduce target from ${target.toLocaleString()} to ${suggestedTarget.toLocaleString()} kcal/day for 14 days, then review average weight, adherence and protein.`;
+                } else if (canAdjustCalories && weekendGap != null && weekendGap > 250) {
+                    experimentTitle = '14-day weekend accuracy experiment';
+                    experimentDetail = 'Keep weekday calories unchanged, but accurately track weekend alcohol, oils, sauces and snacks. Review whether weekend intake still runs high.';
+                } else if (proteinHitPct < 50) {
+                    experimentTitle = '14-day protein anchor experiment';
+                    experimentDetail = `Keep calories steady and hit at least ${Math.round(proteinTarget * 0.8)}g protein on 10 of the next 14 days before reducing calories.`;
+                } else if (canAdjustCalories) {
+                    experimentTitle = 'Hold target for 14 days';
+                    experimentDetail = 'Current data does not justify a calorie change yet. Keep target steady and review trend again after another complete 14 days.';
+                }
+                if (suggestedTarget != null && suggestedTarget < minSafeCalories) {
+                    suggestedTarget = minSafeCalories;
+                    experimentDetail += ` Guardrail applied: target will not go below ${minSafeCalories.toLocaleString()} kcal/day.`;
+                }
+                const reviewDate = this.dateAddString(selectedDate, 14);
+                const targetReviewMessage = confidence === 'Low'
+                    ? 'Do not reduce calories yet. Tracking confidence is low, so improve logging accuracy first.'
+                    : losingTooFast
+                        ? 'Weight loss appears faster than the safe guardrail. Do not reduce calories.'
+                        : proteinHitPct < 50
+                            ? 'Do not reduce calories yet. Protein consistency is too low; improve that first.'
+                            : plateau && canAdjustCalories
+                                ? 'Review: weight is flat, confidence is adequate, and calories are logged. A small 100-150 kcal reduction is reasonable.'
+                                : 'Review: keep the current target until the next 14-day trend is clearer.';
+                const guardrailMessage = `Guardrails: no reduction below ${minSafeCalories.toLocaleString()} kcal/day, no reduction with Low confidence, no reduction when protein adherence is poor, and ease up if loss exceeds about 1% body weight per week.`;
+                const heartHealthNudge = 'Heart-health nudge: favour fibre-rich meals, oats, beans, oily fish and unsaturated fats. Keep saturated fat, alcohol and high-calorie oils visible in your logs.';
+                const activeExperiment = this.profile?.active_experiment_target_kcal ? {
+                    target: this.profile.active_experiment_target_kcal,
+                    started: this.profile.active_experiment_started,
+                    review: this.profile.active_experiment_review,
+                } : null;
+                const phase3 = {
+                    adherenceDays,
+                    logged14Days: logged14.length,
+                    proteinHitDays,
+                    weighIns14: weights14.length,
+                    adherencePct,
+                    proteinHitPct,
+                    weeklyLossRate,
+                    losingTooFast,
+                    canAdjustCalories,
+                    experimentTitle,
+                    experimentDetail,
+                    suggestedTarget,
+                    reviewDate,
+                    targetReviewMessage,
+                    guardrailMessage,
+                    heartHealthNudge,
+                    activeExperiment,
+                };
+
                 let nextAction;
                 if (confidence === 'Low') {
                     nextAction = 'Improve tracking accuracy for 7 days before changing calories. Weigh regularly and track oils, sauces, snacks and weekend alcohol carefully.';
@@ -3285,6 +3396,7 @@
                     nextAction,
                     deficitMismatch,
                     phase2,
+                    phase3,
                 };
             },
 
@@ -3499,6 +3611,7 @@
                     ? phase1.confidenceReasons.join(', ')
                     : 'Your calorie trend is likely reliable.';
                 const p2 = phase1?.phase2;
+                const p3 = phase1?.phase3;
                 const phase2Section = p2 ? `
                         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);">
                             <div style="font-size:10px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:7px;">Multi-week checks</div>
@@ -3509,6 +3622,28 @@
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"><strong style="color:var(--text-primary);">Meal focus:</strong> ${this.esc(p2.mealCoachMessage)}</div>
                                 <div style="font-size:11px;color:var(--text-tertiary);line-height:1.45;">Confidence inputs: ${this.esc(p2.confidenceBreakdown.join(' | '))}</div>
                             </div>
+                        </div>` : '';
+                const activeExperimentText = p3?.activeExperiment
+                    ? `<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:7px;"><strong style="color:var(--text-primary);">Active experiment:</strong> ${p3.activeExperiment.target.toLocaleString()} kcal/day until ${this.esc(p3.activeExperiment.review || 'review date')}.</div>`
+                    : '';
+                const phase3ReviewDate = String(p3?.reviewDate || '').replace(/[^0-9-]/g, '');
+                const phase3Button = p3?.suggestedTarget
+                    ? `<button onclick="app.startPhase3Experiment(${Number(p3.suggestedTarget)}, '${phase3ReviewDate}')" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:9px;background:var(--accent-info);color:white;font-size:12px;font-weight:800;cursor:pointer;">Start 14-day experiment</button>`
+                    : '';
+                const phase3Section = p3 ? `
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);">
+                            <div style="font-size:10px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:7px;">14-day adjustment</div>
+                            ${activeExperimentText}
+                            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:7px;"><strong style="color:var(--text-primary);">${this.esc(p3.experimentTitle)}</strong> ${this.esc(p3.experimentDetail)}</div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+                                <div style="background:var(--bg-secondary);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:14px;font-weight:900;color:var(--text-primary);">${p3.adherenceDays}/${p3.logged14Days || 14}</div><div style="font-size:9px;color:var(--text-tertiary);font-weight:700;">target days</div></div>
+                                <div style="background:var(--bg-secondary);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:14px;font-weight:900;color:var(--text-primary);">${p3.proteinHitDays}/${p3.logged14Days || 14}</div><div style="font-size:9px;color:var(--text-tertiary);font-weight:700;">protein hit</div></div>
+                                <div style="background:var(--bg-secondary);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:14px;font-weight:900;color:var(--text-primary);">${p3.weighIns14}/14</div><div style="font-size:9px;color:var(--text-tertiary);font-weight:700;">weigh-ins</div></div>
+                            </div>
+                            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:7px;"><strong style="color:var(--text-primary);">Target review:</strong> ${this.esc(p3.targetReviewMessage)}</div>
+                            <div style="font-size:11px;color:var(--text-tertiary);line-height:1.45;margin-bottom:7px;">${this.esc(p3.guardrailMessage)}</div>
+                            <div style="font-size:11px;color:var(--text-tertiary);line-height:1.45;">${this.esc(p3.heartHealthNudge)}</div>
+                            ${phase3Button}
                         </div>` : '';
                 const phase1Section = phase1 ? `
                     <div style="border-top:1px solid var(--border-color);margin-top:14px;padding-top:14px;">
@@ -3534,6 +3669,7 @@
                             <strong style="color:${confidenceColor};">Tracking confidence: ${phase1.confidence}</strong> - ${this.esc(confidenceDetail)}${phase1.confidence === 'Low' ? ' Low confidence means the apparent deficit may not be real yet.' : ''}
                         </div>
                         ${phase2Section}
+                        ${phase3Section}
                     </div>` : '';
 
                 document.getElementById('calorie-ring-container').innerHTML =

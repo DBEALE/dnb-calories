@@ -1654,7 +1654,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 61;
+        const APP_BUILD = 63;
 
         const TUTORIAL = [
             {
@@ -1791,6 +1791,17 @@
         ];
 
         const CHANGELOG = [
+            {
+                date: '2026-06-18',
+                title: 'Phase 2 multi-week coaching',
+                items: [
+                    'Added an adaptive real-world maintenance estimate from logged calories and multi-week weight change',
+                    'Added plateau detection when weight remains flat for several weeks with reasonable tracking confidence',
+                    'Added weekday vs weekend calorie comparison to surface hidden weekend surplus patterns',
+                    'Added meal-level coaching to identify the highest-impact meal to review first',
+                    'Expanded tracking confidence with visible contributors such as logged days, weigh-ins, weekend coverage, estimated meals and missing macros',
+                ]
+            },
             {
                 date: '2026-06-18',
                 title: 'Startup guard fix',
@@ -3127,9 +3138,99 @@
                 const loggedDeficit = avgCalories7 != null ? maintenance - avgCalories7 : null;
                 const deficitMismatch = loggedDeficit != null && loggedDeficit >= 250 && weightTrend === 'flat';
 
+                const last21Dates = this.dateRangeStrings(selectedDate, 21);
+                const foods21 = allFoods.filter(e => last21Dates.includes(e.date));
+                const logged21 = dayTotals(last21Dates, foods21);
+                const avgCalories21 = this.average(logged21.map(d => d.calories));
+                const weights21 = this.latestWeightPerDay(await this.getWeightEntries(last21Dates[0], selectedDate));
+                const firstWeight21 = weights21[0];
+                const lastWeight21 = weights21[weights21.length - 1];
+                const daysBetweenWeights = firstWeight21 && lastWeight21
+                    ? Math.max(1, Math.round((new Date(lastWeight21.date) - new Date(firstWeight21.date)) / 86400000))
+                    : 0;
+                const weightChange21 = firstWeight21 && lastWeight21 ? Number(lastWeight21.weight_kg) - Number(firstWeight21.weight_kg) : null;
+                const estimatedMaintenanceReal = avgCalories21 != null && weightChange21 != null && logged21.length >= 14 && weights21.length >= 6 && daysBetweenWeights >= 14
+                    ? Math.round(avgCalories21 - (weightChange21 * 7700 / daysBetweenWeights))
+                    : null;
+                const adaptiveMaintenanceMessage = estimatedMaintenanceReal
+                    ? `Based on ${logged21.length} logged days and ${weights21.length} weigh-ins, real-world maintenance appears closer to ${estimatedMaintenanceReal.toLocaleString()} kcal/day than the setup estimate of ${maintenance.toLocaleString()} kcal/day.`
+                    : 'Need about 14 logged food days and 6 weigh-ins across 2+ weeks before estimating real-world maintenance.';
+
+                const plateau = confidence !== 'Low' && logged21.length >= 14 && weights21.length >= 6 && weightChange21 != null && Math.abs(weightChange21) < 0.3;
+                const plateauMessage = plateau
+                    ? 'Weight has been broadly flat for about 3 weeks. If tracking is accurate, consider reducing target calories by 100-150 kcal or increasing activity slightly.'
+                    : 'No confirmed plateau yet. Keep judging progress from multi-week weight averages.';
+
+                const weekdayTotals = logged21.filter(d => {
+                    const [y, m, day] = d.date.split('-').map(Number);
+                    const dow = new Date(y, m - 1, day).getDay();
+                    return dow >= 1 && dow <= 5;
+                });
+                const weekendTotals = logged21.filter(d => {
+                    const [y, m, day] = d.date.split('-').map(Number);
+                    const dow = new Date(y, m - 1, day).getDay();
+                    return dow === 0 || dow === 6;
+                });
+                const weekdayAvg = this.average(weekdayTotals.map(d => d.calories));
+                const weekendAvg = this.average(weekendTotals.map(d => d.calories));
+                const weekendGap = weekdayAvg != null && weekendAvg != null ? weekendAvg - weekdayAvg : null;
+                const weekendMessage = weekendGap != null && weekendTotals.length >= 2
+                    ? weekendGap > 250
+                        ? `Weekend intake averages ${Math.round(weekendGap).toLocaleString()} kcal/day higher than weekdays. This may be cancelling the weekday deficit.`
+                        : `Weekend intake is within ${Math.abs(Math.round(weekendGap)).toLocaleString()} kcal/day of weekdays, so weekends do not look like the main issue.`
+                    : 'Need logged weekend days before comparing weekday vs weekend intake.';
+
+                const mealsByType = {};
+                foods21.forEach(e => {
+                    const key = e.meal_type || 'meal';
+                    if (!mealsByType[key]) mealsByType[key] = { calories: 0, protein: 0, count: 0 };
+                    mealsByType[key].calories += e.calories || 0;
+                    mealsByType[key].protein += e.protein_g || 0;
+                    mealsByType[key].count += 1;
+                });
+                const mealStats = Object.entries(mealsByType).map(([type, v]) => ({
+                    type,
+                    avgCalories: v.count ? v.calories / v.count : 0,
+                    avgProtein: v.count ? v.protein / v.count : 0,
+                    count: v.count,
+                })).filter(m => m.count >= 3).sort((a, b) => b.avgCalories - a.avgCalories);
+                const mealFocus = mealStats[0] || null;
+                const mealCoachMessage = mealFocus
+                    ? mealFocus.avgCalories > target * 0.35 && mealFocus.avgProtein < 30
+                        ? `${mealFocus.type[0].toUpperCase() + mealFocus.type.slice(1)} averages ${Math.round(mealFocus.avgCalories)} kcal and ${Math.round(mealFocus.avgProtein)}g protein. Reduce this meal by 100-150 kcal or make it more protein-led.`
+                        : `${mealFocus.type[0].toUpperCase() + mealFocus.type.slice(1)} is the highest-calorie meal at ${Math.round(mealFocus.avgCalories)} kcal average with ${Math.round(mealFocus.avgProtein)}g protein. This is the best meal to review first.`
+                    : 'Need repeated meal data before identifying the best meal to adjust.';
+
+                const confidenceBreakdown = [
+                    `${loggedDays.length}/7 food days`,
+                    `${weightsThis.length}/7 weigh-ins`,
+                    `${weekendDaysLogged}/${weekendDates.length || 2} weekend days`,
+                    `${foodsThisWeek.length ? Math.round(estimatedEntries.length / foodsThisWeek.length * 100) : 0}% estimated meals`,
+                    `${foodsThisWeek.length ? Math.round(missingMacroEntries.length / foodsThisWeek.length * 100) : 0}% missing macros`,
+                ];
+                const phase2 = {
+                    avgCalories21,
+                    estimatedMaintenanceReal,
+                    adaptiveMaintenanceMessage,
+                    plateau,
+                    plateauMessage,
+                    weekdayAvg,
+                    weekendAvg,
+                    weekendGap,
+                    weekendMessage,
+                    mealCoachMessage,
+                    confidenceBreakdown,
+                };
+
                 let nextAction;
                 if (confidence === 'Low') {
                     nextAction = 'Improve tracking accuracy for 7 days before changing calories. Weigh regularly and track oils, sauces, snacks and weekend alcohol carefully.';
+                } else if (plateau && estimatedMaintenanceReal && estimatedMaintenanceReal < maintenance - 150) {
+                    nextAction = `Your real-world maintenance may be nearer ${estimatedMaintenanceReal.toLocaleString()} kcal/day. Keep logging accurately and consider lowering the calorie target by 100-150 kcal.`;
+                } else if (plateau) {
+                    nextAction = 'Weight has been flat for about 3 weeks. Keep tracking quality high and consider a small 100-150 kcal target reduction.';
+                } else if (weekendGap != null && weekendGap > 250) {
+                    nextAction = 'Focus on the weekend first. Track alcohol, snacks, oils and sauces accurately before lowering weekday calories.';
                 } else if (deficitMismatch) {
                     nextAction = 'Keep calories similar for now, but check weekend intake, alcohol, portion estimates, oils, sauces and snacks.';
                 } else if (proteinRemaining >= 40) {
@@ -3183,6 +3284,7 @@
                     confidenceReasons,
                     nextAction,
                     deficitMismatch,
+                    phase2,
                 };
             },
 
@@ -3396,6 +3498,18 @@
                 const confidenceDetail = phase1?.confidenceReasons?.length
                     ? phase1.confidenceReasons.join(', ')
                     : 'Your calorie trend is likely reliable.';
+                const p2 = phase1?.phase2;
+                const phase2Section = p2 ? `
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);">
+                            <div style="font-size:10px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:7px;">Multi-week checks</div>
+                            <div style="display:grid;gap:7px;">
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"><strong style="color:var(--text-primary);">Real maintenance:</strong> ${this.esc(p2.adaptiveMaintenanceMessage)}</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"><strong style="color:var(--text-primary);">Plateau:</strong> ${this.esc(p2.plateauMessage)}</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"><strong style="color:var(--text-primary);">Weekends:</strong> ${this.esc(p2.weekendMessage)}</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"><strong style="color:var(--text-primary);">Meal focus:</strong> ${this.esc(p2.mealCoachMessage)}</div>
+                                <div style="font-size:11px;color:var(--text-tertiary);line-height:1.45;">Confidence inputs: ${this.esc(p2.confidenceBreakdown.join(' | '))}</div>
+                            </div>
+                        </div>` : '';
                 const phase1Section = phase1 ? `
                     <div style="border-top:1px solid var(--border-color);margin-top:14px;padding-top:14px;">
                         <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;padding:12px;margin-bottom:12px;">
@@ -3419,6 +3533,7 @@
                         <div style="font-size:12px;line-height:1.55;padding:9px 10px;border-radius:10px;background:${confidenceColor}14;border:1px solid ${confidenceColor}35;color:var(--text-secondary);">
                             <strong style="color:${confidenceColor};">Tracking confidence: ${phase1.confidence}</strong> - ${this.esc(confidenceDetail)}${phase1.confidence === 'Low' ? ' Low confidence means the apparent deficit may not be real yet.' : ''}
                         </div>
+                        ${phase2Section}
                     </div>` : '';
 
                 document.getElementById('calorie-ring-container').innerHTML =

@@ -1,4 +1,4 @@
-const CACHE = 'calorie-tracker-v9';
+const CACHE = 'calorie-tracker-v10';
 
 const PRECACHE = [
   './',

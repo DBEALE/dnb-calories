@@ -1654,7 +1654,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 65;
+        const APP_BUILD = 68;
 
         const TUTORIAL = [
             {
@@ -1793,6 +1793,27 @@
         const CHANGELOG = [
             {
                 date: '2026-06-18',
+                title: 'Annotated What\'s New screenshots',
+                items: [
+                    'Added annotated mobile screenshots to the Phase 1-4 changelog entries',
+                    'Future visible changes should include an annotated screenshot so the change is easy to review',
+                ],
+                screenshot: 'phase4-mobile-dashboard-annotated.png',
+            },
+            {
+                date: '2026-06-18',
+                title: 'Phase 4 tracking accuracy review',
+                items: [
+                    'Added a tracking accuracy panel that highlights meals most likely to distort the calorie deficit',
+                    'Added per-meal confidence labels so estimated or incomplete entries are easier to spot',
+                    'Added a weekly review message combining calorie average, weight trend, protein consistency and tracking confidence',
+                    'Added active 14-day experiment review guidance once the review date is reached',
+                    'Added repeated-food consistency checks to flag meals whose calories differ sharply from your usual entries',
+                ],
+                screenshot: 'phase4-mobile-dashboard-annotated.png',
+            },
+            {
+                date: '2026-06-18',
                 title: 'Phase 3 controlled experiments',
                 items: [
                     'Added 14-day adjustment guidance so calorie changes are tested instead of guessed',
@@ -1800,7 +1821,8 @@
                     'Added safe target review rules before recommending calorie reductions',
                     'Added a guarded Start 14-day experiment action that updates the calorie target after confirmation',
                     'Added a heart-health nutrition nudge focused on fibre, saturated fat visibility and healthier fat choices',
-                ]
+                ],
+                screenshot: 'phase3-mobile-dashboard-annotated.png',
             },
             {
                 date: '2026-06-18',
@@ -1811,7 +1833,8 @@
                     'Added weekday vs weekend calorie comparison to surface hidden weekend surplus patterns',
                     'Added meal-level coaching to identify the highest-impact meal to review first',
                     'Expanded tracking confidence with visible contributors such as logged days, weigh-ins, weekend coverage, estimated meals and missing macros',
-                ]
+                ],
+                screenshot: 'phase2-mobile-dashboard-annotated.png',
             },
             {
                 date: '2026-06-18',
@@ -1830,7 +1853,8 @@
                     'Flags when logged calories suggest a deficit but real-world weight trend is flat',
                     'Shows protein eaten vs target with grams remaining and practical next-meal guidance',
                     'Adds High / Medium / Low tracking confidence and one clear next best action',
-                ]
+                ],
+                screenshot: 'phase1-mobile-dashboard-annotated.png',
             },
             {
                 date: '2026-06-16',
@@ -3040,6 +3064,8 @@
                             e.salt_g    ? `Sa ${Math.round(e.salt_g * 10) / 10}g` : '',
                         ].filter(Boolean).join('  ·  ');
                         const subtitle = [e.brand, e.serving_description].filter(Boolean).map(s => this.esc(s)).join(' · ');
+                        const accuracy = this.entryAccuracyInfo(e);
+                        const accuracyBadge = `<button onclick="app.openEditEntry(${e.id})" style="margin-top:4px;border:1px solid ${accuracy.color}44;background:${accuracy.color}12;color:${accuracy.color};border-radius:999px;padding:2px 7px;font-size:9px;font-weight:800;line-height:1;cursor:pointer;">${this.esc(accuracy.level)}</button>`;
                         return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color);">
                             <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
@@ -3048,6 +3074,7 @@
                                     <div style="font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this.esc(e.food_name)}</div>
                                     ${subtitle ? `<div style="font-size: 11px; color: var(--text-tertiary); margin-top: 1px;">${subtitle}</div>` : ''}
                                     ${macros ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; letter-spacing: 0.2px;">${macros}</div>` : ''}
+                                    ${accuracy.score >= 2 ? accuracyBadge : ''}
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px; margin-left: 12px; flex-shrink: 0;">
@@ -3097,6 +3124,74 @@
             average(nums) {
                 const valid = nums.filter(n => Number.isFinite(n));
                 return valid.length ? valid.reduce((s, n) => s + n, 0) / valid.length : null;
+            },
+
+            normaliseFoodName(name) {
+                return String(name || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9 ]/g, ' ')
+                    .replace(/\b(with|and|the|a|an|of|portion|serving)\b/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            },
+
+            entryAccuracyInfo(entry) {
+                const reasons = [];
+                const source = entry?.source_type || '';
+                const confidence = Number(entry?.ocr_confidence);
+                const hasConfidence = Number.isFinite(confidence);
+                const foodName = `${entry?.food_name || ''} ${entry?.brand || ''} ${entry?.serving_description || ''}`;
+                const calories = Number(entry?.calories || 0);
+                const hasMacros = !!(entry?.protein_g || entry?.carbs_g || entry?.fat_g);
+                const hasServing = !!String(entry?.serving_description || entry?.brand || '').trim();
+                const genericName = /^(food|meal|snack|drink|toast|sandwich|eggs?|rice|pasta|chicken|salad|bread)$/i.test(String(entry?.food_name || '').trim());
+                const alcohol = /beer|wine|lager|cider|vodka|gin|whisky|rum|cocktail|alcohol|pint/i.test(foodName);
+                const oilSauce = /oil|butter|mayo|mayonnaise|sauce|dressing|cream|cheese/i.test(foodName);
+
+                let score = 0;
+                if (source === 'image') {
+                    score += 2;
+                    reasons.push('AI photo estimate');
+                }
+                if (source === 'manual') {
+                    score += 1;
+                    reasons.push('manual estimate');
+                }
+                if (hasConfidence && confidence < 70) {
+                    score += 2;
+                    reasons.push(`low AI confidence ${Math.round(confidence)}%`);
+                } else if (hasConfidence && confidence < 85) {
+                    score += 1;
+                    reasons.push(`medium AI confidence ${Math.round(confidence)}%`);
+                }
+                if (!hasMacros) {
+                    score += 2;
+                    reasons.push('missing macros');
+                }
+                if (!hasServing) {
+                    score += 1;
+                    reasons.push('no serving detail');
+                }
+                if (genericName) {
+                    score += 1;
+                    reasons.push('generic food name');
+                }
+                if (alcohol && !hasServing) {
+                    score += 2;
+                    reasons.push('alcohol detail missing');
+                }
+                if (oilSauce) {
+                    score += 1;
+                    reasons.push('easy to underestimate');
+                }
+                if (calories > 0 && calories < 80 && !/drink|coffee|tea|soda|water/i.test(foodName)) {
+                    score += 1;
+                    reasons.push('very low calories');
+                }
+
+                const level = score >= 4 ? 'Needs review' : score >= 2 ? 'Estimated' : 'High confidence';
+                const color = score >= 4 ? '#ef4444' : score >= 2 ? '#f59e0b' : '#10b981';
+                return { score, level, color, reasons };
             },
 
             latestWeightPerDay(weights) {
@@ -3333,6 +3428,95 @@
                     activeExperiment,
                 };
 
+                const median = (values) => {
+                    const sorted = values.filter(v => Number.isFinite(v)).sort((a, b) => a - b);
+                    if (!sorted.length) return null;
+                    const mid = Math.floor(sorted.length / 2);
+                    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+                };
+                const accuracyCandidates = foodsThisWeek
+                    .map(entry => {
+                        const info = this.entryAccuracyInfo(entry);
+                        return {
+                            id: entry.id,
+                            name: entry.food_name || 'Food entry',
+                            calories: entry.calories || 0,
+                            date: entry.date,
+                            level: info.level,
+                            color: info.color,
+                            score: info.score,
+                            reasons: info.reasons.slice(0, 3),
+                        };
+                    })
+                    .filter(item => item.score >= 2)
+                    .sort((a, b) => b.score - a.score || b.calories - a.calories)
+                    .slice(0, 3);
+                const repeatedFoodWarnings = foodsThisWeek.map(entry => {
+                    const key = this.normaliseFoodName(entry.food_name);
+                    if (!key || key.length < 4 || !entry.calories) return null;
+                    const history = allFoods.filter(other =>
+                        other.id !== entry.id &&
+                        other.date < entry.date &&
+                        this.normaliseFoodName(other.food_name) === key &&
+                        Number(other.calories) > 0
+                    ).slice(-8);
+                    if (history.length < 2) return null;
+                    const usualCalories = median(history.map(e => Number(e.calories)));
+                    if (!usualCalories) return null;
+                    const deltaPct = Math.round((Number(entry.calories) - usualCalories) / usualCalories * 100);
+                    if (Math.abs(deltaPct) < 25) return null;
+                    return {
+                        id: entry.id,
+                        name: entry.food_name || 'Food entry',
+                        calories: entry.calories || 0,
+                        usualCalories: Math.round(usualCalories),
+                        deltaPct,
+                    };
+                }).filter(Boolean).sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct)).slice(0, 2);
+                const accuracyMessage = accuracyCandidates.length
+                    ? `${accuracyCandidates.length} meals this week may distort the calorie trend. Review the highest-impact estimates before changing your target.`
+                    : repeatedFoodWarnings.length
+                        ? 'Repeated-food calories differ from your usual entries. Check whether the portion changed or the estimate is off.'
+                        : 'No major food accuracy issues detected this week. Keep serving sizes, oils, sauces and snacks visible.';
+                const weeklyReviewMessage = loggedDays.length < 4
+                    ? `Weekly review: only ${loggedDays.length}/7 days are logged, so the weekly signal is incomplete. Log more complete days before judging progress.`
+                    : confidence === 'Low'
+                        ? 'Weekly review: the trend is not reliable enough for a target change. Improve logging confidence first.'
+                        : weightTrend === 'losing'
+                            ? `Weekly review: average intake is ${Math.round(avgCalories7).toLocaleString()} kcal/day and weight is trending down. Keep the plan steady.`
+                            : weightTrend === 'flat' && loggedDeficit != null && loggedDeficit > 250
+                                ? 'Weekly review: logged calories suggest a deficit but weight is flat. Prioritise accuracy review before cutting calories again.'
+                                : weightTrend === 'gaining'
+                                    ? 'Weekly review: weight is trending up. Review high-calorie estimates and weekend intake before changing the target.'
+                                    : 'Weekly review: keep collecting food and weight data until the trend is clearer.';
+                let experimentReviewMessage = 'No active experiment is due for review yet.';
+                if (activeExperiment?.review && selectedDate >= activeExperiment.review) {
+                    const expStart = activeExperiment.started || this.dateAddString(activeExperiment.review, -14);
+                    const expDates = allFoods.filter(e => e.date >= expStart && e.date <= activeExperiment.review);
+                    const expLogged = dayTotals(this.dateRangeStrings(activeExperiment.review, 14), expDates);
+                    const expWeights = this.latestWeightPerDay(await this.getWeightEntries(expStart, activeExperiment.review));
+                    const expFirst = expWeights[0];
+                    const expLast = expWeights[expWeights.length - 1];
+                    const expWeightChange = expFirst && expLast ? Number(expLast.weight_kg) - Number(expFirst.weight_kg) : null;
+                    const expAvgCalories = this.average(expLogged.map(d => d.calories));
+                    if (expLogged.length < 10 || expWeights.length < 4) {
+                        experimentReviewMessage = `Experiment review: not enough complete data yet (${expLogged.length}/14 food days, ${expWeights.length} weigh-ins). Extend the same plan for another week.`;
+                    } else if (expWeightChange != null && expWeightChange <= -0.3) {
+                        experimentReviewMessage = `Experiment review: average intake was ${Math.round(expAvgCalories).toLocaleString()} kcal/day and weight changed ${expWeightChange.toFixed(1)} kg. Continue this target for another 14 days.`;
+                    } else if (expWeightChange != null && Math.abs(expWeightChange) < 0.3) {
+                        experimentReviewMessage = `Experiment review: average intake was ${Math.round(expAvgCalories).toLocaleString()} kcal/day but weight was broadly flat. Review tracking accuracy before lowering calories again.`;
+                    } else {
+                        experimentReviewMessage = `Experiment review: weight increased during the experiment. Review high-impact estimates and weekend intake before making a new target change.`;
+                    }
+                }
+                const phase4 = {
+                    accuracyMessage,
+                    accuracyCandidates,
+                    repeatedFoodWarnings,
+                    weeklyReviewMessage,
+                    experimentReviewMessage,
+                };
+
                 let nextAction;
                 if (confidence === 'Low') {
                     nextAction = 'Improve tracking accuracy for 7 days before changing calories. Weigh regularly and track oils, sauces, snacks and weekend alcohol carefully.';
@@ -3397,6 +3581,7 @@
                     deficitMismatch,
                     phase2,
                     phase3,
+                    phase4,
                 };
             },
 
@@ -3612,6 +3797,7 @@
                     : 'Your calorie trend is likely reliable.';
                 const p2 = phase1?.phase2;
                 const p3 = phase1?.phase3;
+                const p4 = phase1?.phase4;
                 const phase2Section = p2 ? `
                         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);">
                             <div style="font-size:10px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:7px;">Multi-week checks</div>
@@ -3645,6 +3831,32 @@
                             <div style="font-size:11px;color:var(--text-tertiary);line-height:1.45;">${this.esc(p3.heartHealthNudge)}</div>
                             ${phase3Button}
                         </div>` : '';
+                const phase4Candidates = p4?.accuracyCandidates?.length
+                    ? p4.accuracyCandidates.map(item => `
+                        <button onclick="app.openEditEntry(${item.id})" style="width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;text-align:left;border:1px solid ${item.color}33;background:${item.color}10;border-radius:9px;padding:8px;cursor:pointer;">
+                            <span style="min-width:0;">
+                                <span style="display:block;font-size:12px;font-weight:800;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.esc(item.name)}</span>
+                                <span style="display:block;font-size:10px;color:var(--text-tertiary);line-height:1.35;">${this.esc(item.reasons.join(', ') || item.level)}</span>
+                            </span>
+                            <span style="font-size:11px;font-weight:900;color:${item.color};white-space:nowrap;">${Math.round(item.calories).toLocaleString()} kcal</span>
+                        </button>`).join('')
+                    : `<div style="font-size:11px;color:var(--text-tertiary);line-height:1.45;">No high-priority meals need review from this week.</div>`;
+                const repeatWarnings = p4?.repeatedFoodWarnings?.length
+                    ? p4.repeatedFoodWarnings.map(item => `
+                        <button onclick="app.openEditEntry(${item.id})" style="width:100%;display:flex;justify-content:space-between;gap:8px;text-align:left;border:1px solid var(--border-color);background:var(--bg-secondary);border-radius:9px;padding:8px;cursor:pointer;">
+                            <span style="font-size:11px;color:var(--text-secondary);line-height:1.35;">${this.esc(item.name)} is ${item.deltaPct > 0 ? '+' : ''}${item.deltaPct}% vs usual ${item.usualCalories.toLocaleString()} kcal.</span>
+                            <span style="font-size:10px;color:var(--text-tertiary);font-weight:800;">Review</span>
+                        </button>`).join('')
+                    : '';
+                const phase4Section = p4 ? `
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);">
+                            <div style="font-size:10px;font-weight:800;color:var(--text-tertiary);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:7px;">Tracking accuracy review</div>
+                            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;"><strong style="color:var(--text-primary);">Accuracy:</strong> ${this.esc(p4.accuracyMessage)}</div>
+                            <div style="display:grid;gap:6px;margin-bottom:${repeatWarnings ? '8px' : '0'};">${phase4Candidates}</div>
+                            ${repeatWarnings ? `<div style="display:grid;gap:6px;margin-bottom:8px;">${repeatWarnings}</div>` : ''}
+                            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-top:8px;"><strong style="color:var(--text-primary);">Weekly review:</strong> ${this.esc(p4.weeklyReviewMessage)}</div>
+                            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-top:7px;"><strong style="color:var(--text-primary);">Experiment:</strong> ${this.esc(p4.experimentReviewMessage)}</div>
+                        </div>` : '';
                 const phase1Section = phase1 ? `
                     <div style="border-top:1px solid var(--border-color);margin-top:14px;padding-top:14px;">
                         <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;padding:12px;margin-bottom:12px;">
@@ -3670,6 +3882,7 @@
                         </div>
                         ${phase2Section}
                         ${phase3Section}
+                        ${phase4Section}
                     </div>` : '';
 
                 document.getElementById('calorie-ring-container').innerHTML =
@@ -4951,6 +5164,11 @@
                             <ul style="margin: 0; padding-left: 16px;">
                                 ${entry.items.map(item => `<li style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; line-height: 1.5;">${item}</li>`).join('')}
                             </ul>
+                            ${entry.screenshot ? `
+                                <button onclick="window.open('${this.esc(entry.screenshot)}', '_blank')" style="margin-top:10px;border:none;background:transparent;padding:0;width:100%;cursor:pointer;text-align:left;">
+                                    <img src="${this.esc(entry.screenshot)}" alt="${this.esc(entry.title)} annotated screenshot" loading="lazy" style="display:block;width:100%;max-height:360px;object-fit:contain;border-radius:12px;border:1px solid var(--border-color);background:var(--bg-secondary);">
+                                    <div style="font-size:10px;color:var(--text-tertiary);font-weight:700;margin-top:5px;text-align:center;">Tap screenshot to open full size</div>
+                                </button>` : ''}
                         </div>`;
                 }).join('');
                 document.getElementById('changes-list').innerHTML = html;

@@ -93,6 +93,18 @@
             display: block;
         }
 
+        .tracking-review-row {
+            min-width: 0;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .tracking-review-row__summary {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(4px); }
             to   { opacity: 1; transform: translateY(0); }
@@ -1654,7 +1666,7 @@
     </div>
 
     <script>
-        const APP_BUILD = 68;
+        const APP_BUILD = 69;
 
         const TUTORIAL = [
             {
@@ -1791,6 +1803,15 @@
         ];
 
         const CHANGELOG = [
+            {
+                date: '2026-06-19',
+                title: 'Mobile tracking review layout',
+                items: [
+                    'Fixed long food names extending past the right edge of the screen in the tracking accuracy review',
+                    'Kept calorie totals and Review actions visible on narrow mobile screens',
+                ],
+                screenshot: 'mobile-tracking-review-overflow-annotated.png',
+            },
             {
                 date: '2026-06-18',
                 title: 'Annotated What\'s New screenshots',
@@ -3833,8 +3854,8 @@
                         </div>` : '';
                 const phase4Candidates = p4?.accuracyCandidates?.length
                     ? p4.accuracyCandidates.map(item => `
-                        <button onclick="app.openEditEntry(${item.id})" style="width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;text-align:left;border:1px solid ${item.color}33;background:${item.color}10;border-radius:9px;padding:8px;cursor:pointer;">
-                            <span style="min-width:0;">
+                        <button class="tracking-review-row" onclick="app.openEditEntry(${item.id})" style="width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;text-align:left;border:1px solid ${item.color}33;background:${item.color}10;border-radius:9px;padding:8px;cursor:pointer;">
+                            <span class="tracking-review-row__summary">
                                 <span style="display:block;font-size:12px;font-weight:800;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this.esc(item.name)}</span>
                                 <span style="display:block;font-size:10px;color:var(--text-tertiary);line-height:1.35;">${this.esc(item.reasons.join(', ') || item.level)}</span>
                             </span>
@@ -3843,8 +3864,8 @@
                     : `<div style="font-size:11px;color:var(--text-tertiary);line-height:1.45;">No high-priority meals need review from this week.</div>`;
                 const repeatWarnings = p4?.repeatedFoodWarnings?.length
                     ? p4.repeatedFoodWarnings.map(item => `
-                        <button onclick="app.openEditEntry(${item.id})" style="width:100%;display:flex;justify-content:space-between;gap:8px;text-align:left;border:1px solid var(--border-color);background:var(--bg-secondary);border-radius:9px;padding:8px;cursor:pointer;">
-                            <span style="font-size:11px;color:var(--text-secondary);line-height:1.35;">${this.esc(item.name)} is ${item.deltaPct > 0 ? '+' : ''}${item.deltaPct}% vs usual ${item.usualCalories.toLocaleString()} kcal.</span>
+                        <button class="tracking-review-row" onclick="app.openEditEntry(${item.id})" style="width:100%;display:flex;justify-content:space-between;gap:8px;text-align:left;border:1px solid var(--border-color);background:var(--bg-secondary);border-radius:9px;padding:8px;cursor:pointer;">
+                            <span class="tracking-review-row__summary" style="font-size:11px;color:var(--text-secondary);line-height:1.35;">${this.esc(item.name)} is ${item.deltaPct > 0 ? '+' : ''}${item.deltaPct}% vs usual ${item.usualCalories.toLocaleString()} kcal.</span>
                             <span style="font-size:10px;color:var(--text-tertiary);font-weight:800;">Review</span>
                         </button>`).join('')
                     : '';
